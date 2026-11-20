@@ -61,6 +61,7 @@ local TITLE_FENCE = "`````"
 --- @field _scroll_scheduled boolean
 --- @field _last_sender? "user"|"agent"
 --- @field _provider_name? string
+--- @field _agent_name? fun(): string|nil Names the agent's headings in place of the provider
 --- @field _is_restoring boolean
 --- @field _thinking_extmark_id? integer
 --- @field _thinking_start_line? integer
@@ -90,6 +91,11 @@ end
 --- @param name string
 function MessageWriter:set_provider_name(name)
     self._provider_name = name
+end
+
+--- @param name fun(): string|nil
+function MessageWriter:set_agent_name(name)
+    self._agent_name = name
 end
 
 --- Resets sender tracking so the next message writes a fresh header
@@ -154,7 +160,9 @@ function MessageWriter:_maybe_write_sender_header(session_update_type)
         end
     else
         local icon = icons.agent or ""
-        local name = self._provider_name or "unknown"
+        local name = self._agent_name and self._agent_name()
+            or self._provider_name
+            or "unknown"
         header = string.format("### %s Agent - %s", icon, name)
     end
 

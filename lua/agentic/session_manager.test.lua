@@ -533,6 +533,57 @@ describe("agentic.SessionManager", function()
         end)
     end)
 
+    describe("_agent_name", function()
+        local Config = require("agentic.config")
+
+        after_each(function()
+            Config.agent_name = nil
+        end)
+
+        it("asks agent_name for the name of the session's ACP id", function()
+            Config.agent_name = function(session_id)
+                return session_id == "acp-1" and "calm-otter" or nil
+            end
+
+            assert.equal(
+                "calm-otter",
+                SessionManager._agent_name({ session_id = "acp-1" })
+            )
+        end)
+
+        it(
+            "has none before the session has an id, or without agent_name",
+            function()
+                Config.agent_name = function()
+                    return "calm-otter"
+                end
+                assert.is_nil(SessionManager._agent_name({}))
+
+                Config.agent_name = nil
+                assert.is_nil(
+                    SessionManager._agent_name({ session_id = "acp-1" })
+                )
+            end
+        )
+
+        it(
+            "reports a failing agent_name and keeps the provider's name",
+            function()
+                local notify_stub = spy.stub(Logger, "notify")
+                Config.agent_name = function()
+                    error("boom")
+                end
+
+                local name =
+                    SessionManager._agent_name({ session_id = "acp-1" })
+                notify_stub:revert()
+
+                assert.is_nil(name)
+                assert.equal(1, #notify_stub.calls)
+            end
+        )
+    end)
+
     describe("_handle_connection_error", function()
         --- @type TestStub
         local get_instance_stub

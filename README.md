@@ -1307,6 +1307,24 @@ chat:
 }
 ```
 
+### Naming the Agent in the Chat
+
+Agent messages are headed `Agent - <provider name>`. To head them with a name of
+your own per session, such as the name your agent CLI gave it, return it from
+`agent_name`; returning `nil` keeps the provider's name:
+
+```lua
+{
+  "carlos-algms/agentic.nvim",
+  --- @type agentic.PartialUserConfig
+  opts = {
+    agent_name = function(session_id)
+      return my_session_names[session_id]
+    end,
+  },
+}
+```
+
 ### Customizing Message Icons
 
 You can customize the icons used for messages and interaction states:

@@ -1616,6 +1616,36 @@ describe("agentic.ui.MessageWriter", function()
             assert.equal(1, count_matching_lines("### .* Agent %- TestAgent"))
         end)
 
+        it(
+            "heads agent messages with the agent's name when it has one",
+            function()
+                writer:set_provider_name("TestAgent")
+                writer:set_agent_name(function()
+                    return "calm-otter"
+                end)
+                writer:write_message_chunk(
+                    make_update("response", "agent_message_chunk")
+                )
+
+                assert.equal(
+                    1,
+                    count_matching_lines("### .* Agent %- calm%-otter$")
+                )
+            end
+        )
+
+        it("keeps the provider's name while the agent has none", function()
+            writer:set_provider_name("TestAgent")
+            writer:set_agent_name(function()
+                return nil
+            end)
+            writer:write_message_chunk(
+                make_update("response", "agent_message_chunk")
+            )
+
+            assert.equal(1, count_matching_lines("### .* Agent %- TestAgent$"))
+        end)
+
         it("skips header for consecutive same sender", function()
             writer:write_message_chunk(
                 make_update("msg1", "user_message_chunk")

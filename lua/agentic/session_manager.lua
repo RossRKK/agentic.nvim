@@ -102,6 +102,9 @@ function SessionManager:new(agent, provider_name, on_new_session)
 
     self.message_writer = MessageWriter:new(self.widget.buf_nrs.chat)
     self.message_writer:set_provider_name(self.agent.provider_config.name)
+    self.message_writer:set_agent_name(function()
+        return self:_agent_name()
+    end)
     self.status_animation = StatusAnimation:new(self.widget.buf_nrs.chat)
 
     self.permission_manager = PermissionManager:new(self.message_writer)
@@ -513,6 +516,20 @@ end
 --- NOTE: This is used by users inside hooks, moving/renaming this is a breaking change!
 function SessionManager:schedule_header_refresh()
     self.widget:schedule_header_refresh()
+end
+
+--- The name `Config.agent_name` gives this session's agent, or nil for the provider's.
+--- @return string|nil
+function SessionManager:_agent_name()
+    if not (Config.agent_name and self.session_id) then
+        return nil
+    end
+    local ok, name = pcall(Config.agent_name, self.session_id)
+    if not ok then
+        Logger.notify("Error in agent_name: " .. tostring(name))
+        return nil
+    end
+    return name
 end
 
 --- @param mode_id string

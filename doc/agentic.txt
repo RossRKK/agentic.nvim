@@ -1043,6 +1043,19 @@ Chat icons ~
   }
 <
 
+                                                  *agentic-agent-name*
+Agent name ~
+Heads agent messages with a name per ACP session instead of the provider's;
+nil keeps the provider's name.
+>lua
+  --- @type agentic.PartialUserConfig
+  opts = {
+    agent_name = function(session_id)
+      return my_session_names[session_id]
+    end,
+  }
+<
+
                                                *agentic-message-icons*
 Message icons ~
 >lua

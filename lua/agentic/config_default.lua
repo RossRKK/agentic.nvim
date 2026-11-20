@@ -351,6 +351,7 @@
 --- @field tool_calls agentic.UserConfig.ToolCalls
 --- @field hooks agentic.UserConfig.Hooks
 --- @field headers agentic.UserConfig.Headers
+--- @field agent_name? fun(session_id: string): string|nil Names the agent in the chat's headings; nil keeps the provider's name
 --- @field acp_configs agentic.UserConfig.ACPConfigs
 --- @field settings agentic.UserConfig.Settings
 --- @field provider_switcher agentic.UserConfig.ProviderSwitcher
@@ -642,6 +643,8 @@ local ConfigDefault = {
     },
 
     headers = {},
+
+    agent_name = nil,
 
     acp_configs = {},
 
