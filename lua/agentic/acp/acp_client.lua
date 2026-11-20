@@ -848,10 +848,12 @@ end
 --- @param handlers agentic.acp.ClientHandlers
 --- @param callback fun(result: agentic.acp.SessionCreationResponse|nil, err: agentic.acp.ACPError|nil)
 --- @param cwd_callback agentic.UserConfig.SessionCwdFn|nil
-function ACPClient:create_session(handlers, callback, cwd_callback)
+--- @param meta table|nil sent as the request's `_meta`, for provider extensions
+function ACPClient:create_session(handlers, callback, cwd_callback, meta)
     self:_send_request("session/new", {
         cwd = resolve_session_cwd(cwd_callback),
         mcpServers = {},
+        _meta = meta,
     }, function(result, err)
         if err then
             Logger.notify(
@@ -889,12 +891,14 @@ end
 --- @param mcp_servers table[]|nil
 --- @param handlers agentic.acp.ClientHandlers
 --- @param on_load_complete fun(result: agentic.acp.LoadSessionResponse|nil, err: agentic.acp.ACPError|nil)|nil
+--- @param meta table|nil sent as the request's `_meta`, for provider extensions
 function ACPClient:load_session(
     session_id,
     cwd_callback,
     mcp_servers,
     handlers,
-    on_load_complete
+    on_load_complete,
+    meta
 )
     if
         not self.agent_capabilities or not self.agent_capabilities.loadSession
@@ -918,6 +922,7 @@ function ACPClient:load_session(
         sessionId = session_id,
         cwd = resolve_session_cwd(cwd_callback),
         mcpServers = mcp_servers or {},
+        _meta = meta,
     }, function(result, err)
         if not result and not err then
             err = self:__create_error(

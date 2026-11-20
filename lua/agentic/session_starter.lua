@@ -123,7 +123,7 @@ function SessionStartAttempt:start(spec, handlers, callback)
                     response = response,
                 }
                 self:complete(result, nil)
-            end, spec.cwd)
+            end, spec.cwd, spec.meta)
         else
             self._replaying = true
             self._agent:load_session(
@@ -150,7 +150,8 @@ function SessionStartAttempt:start(spec, handlers, callback)
                         response = response,
                     }
                     self:complete(result, nil)
-                end
+                end,
+                spec.meta
             )
         end
     end, function(err)

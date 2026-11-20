@@ -377,6 +377,62 @@ describe("ACPClient", function()
         end
     end)
 
+    describe("session _meta", function()
+        local meta = { claudeCode = { options = { env = { A = "1" } } } }
+
+        --- @type { name: string, method: string, send: fun(client: agentic.acp.ACPClient, meta: table|nil) }[]
+        local requests = {
+            {
+                name = "create_session",
+                method = "session/new",
+                send = function(client, given)
+                    client:create_session(
+                        NOOP_HANDLERS,
+                        function() end,
+                        nil,
+                        given
+                    )
+                end,
+            },
+            {
+                name = "load_session",
+                method = "session/load",
+                send = function(client, given)
+                    client:load_session(
+                        "sid-1",
+                        nil,
+                        {},
+                        NOOP_HANDLERS,
+                        nil,
+                        given
+                    )
+                end,
+            },
+        }
+
+        for _, request in ipairs(requests) do
+            it(request.name .. " sends the _meta it is given", function()
+                local client = create_ready_client(LOAD_CAPS)
+                local sent = capture_sent()
+
+                request.send(client, meta)
+
+                assert.equal(request.method, sent[1].method)
+                assert.equal(meta, sent[1].params._meta)
+            end)
+
+            it(request.name .. " sends no _meta without one", function()
+                local client = create_ready_client(LOAD_CAPS)
+                local sent = capture_sent()
+
+                request.send(client, nil)
+
+                assert.equal(request.method, sent[1].method)
+                assert.is_nil(sent[1].params._meta)
+            end)
+        end
+    end)
+
     describe("initialize", function()
         it("advertises boolean session config options as an object", function()
             assert.equal("[]", vim.json.encode({}))

@@ -237,9 +237,10 @@
 --- @field models? agentic.acp.ModelsInfo
 --- @field configOptions? agentic.acp.AnyConfigOption[]
 
+--- `meta` is sent as the session request's ACP `_meta`, for provider extensions.
 --- @alias agentic.SessionStartSpec
---- | { kind: "new", cwd?: agentic.UserConfig.SessionCwdFn }
---- | { kind: "load", session_id: string, title?: string, timestamp?: string|integer, cwd?: agentic.UserConfig.SessionCwdFn }
+--- | { kind: "new", cwd?: agentic.UserConfig.SessionCwdFn, meta?: table }
+--- | { kind: "load", session_id: string, title?: string, timestamp?: string|integer, cwd?: agentic.UserConfig.SessionCwdFn, meta?: table }
 
 --- @class agentic.SessionStartNewResult
 --- @field kind "new"

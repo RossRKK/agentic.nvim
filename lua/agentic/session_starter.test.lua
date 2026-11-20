@@ -47,9 +47,10 @@ describe("SessionStarter", function()
             self.failure_callback = on_failure
         end
 
-        function agent:create_session(_handlers, callback)
+        function agent:create_session(_handlers, callback, _cwd, meta)
             self.create_calls = self.create_calls + 1
             self.create_callback = callback
+            self.create_meta = meta
         end
 
         function agent:load_session(
@@ -57,12 +58,14 @@ describe("SessionStarter", function()
             cwd,
             _servers,
             _handlers,
-            callback
+            callback,
+            meta
         )
             self.load_calls = self.load_calls + 1
             self.load_session_id = session_id
             self.load_cwd = cwd
             self.load_callback = callback
+            self.load_meta = meta
         end
 
         function agent:cancel_session(session_id)
@@ -157,6 +160,26 @@ describe("SessionStarter", function()
 
         assert.equal(cwd, agent.load_cwd)
     end)
+
+    for _, kind in ipairs({ "new", "load" }) do
+        it("passes the spec's meta on to " .. kind, function()
+            local agent = new_agent()
+            local meta = { claudeCode = { options = { env = { A = "1" } } } }
+
+            SessionStarter.start(
+                agent,
+                { kind = kind, session_id = "load-id", meta = meta },
+                prepare(NOOP_HANDLERS),
+                function() end
+            )
+            agent.ready_callback(agent)
+
+            assert.equal(
+                meta,
+                agent[kind == "new" and "create_meta" or "load_meta"]
+            )
+        end)
+    end
 
     for _, case in ipairs({
         { kind = "new", session_id = "queued-new" },
