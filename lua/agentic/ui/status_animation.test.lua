@@ -267,6 +267,60 @@ describe("agentic.ui.StatusAnimation", function()
             assert.equal(2, extmarks()[1][2])
         end)
 
+        describe("in a window", function()
+            local winid
+
+            before_each(function()
+                local lines = {}
+                for i = 1, 30 do
+                    lines[i] = "line " .. i
+                end
+                vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
+                winid = track_win(vim.api.nvim_open_win(bufnr, false, {
+                    relative = "editor",
+                    row = 0,
+                    col = 0,
+                    width = 40,
+                    height = 10,
+                }))
+            end)
+
+            --- @return boolean
+            local function shows_whole_end()
+                local topline = vim.fn.getwininfo(winid)[1].topline
+                local rows = vim.api.nvim_win_text_height(
+                    winid,
+                    { start_row = topline - 1 }
+                ).all
+                return rows <= vim.api.nvim_win_get_height(winid)
+            end
+
+            it(
+                "scrolls a window that follows the end to show added rows",
+                function()
+                    vim.api.nvim_win_call(winid, function()
+                        vim.cmd("normal! G0zb")
+                    end)
+                    assert.is_true(shows_whole_end())
+
+                    animation:set_footer(FOOTER)
+
+                    assert.is_true(shows_whole_end())
+                end
+            )
+
+            it("leaves a window reading further up where it is", function()
+                vim.api.nvim_win_call(winid, function()
+                    vim.cmd("normal! 20Gzt")
+                end)
+                local topline = vim.fn.getwininfo(winid)[1].topline
+
+                animation:set_footer(FOOTER)
+
+                assert.equal(topline, vim.fn.getwininfo(winid)[1].topline)
+            end)
+        end)
+
         it("clears once the footer is empty and the spinner stopped", function()
             animation:set_footer(FOOTER)
 

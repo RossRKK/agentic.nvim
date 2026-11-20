@@ -150,13 +150,57 @@ function StatusAnimation:_draw()
     local virt_lines = { { { "" } } }
     vim.list_extend(virt_lines, body)
 
-    local line_num = vim.api.nvim_buf_line_count(self._bufnr) - 1
-    self._extmark_id =
-        vim.api.nvim_buf_set_extmark(self._bufnr, NS_ANIMATION, line_num, 0, {
+    local grew = #virt_lines > self:_count_drawn_lines()
+
+    local line_count = vim.api.nvim_buf_line_count(self._bufnr)
+    self._extmark_id = vim.api.nvim_buf_set_extmark(
+        self._bufnr,
+        NS_ANIMATION,
+        line_count - 1,
+        0,
+        {
             id = self._extmark_id,
             virt_lines = virt_lines,
             virt_lines_above = false,
-        })
+        }
+    )
+
+    -- Auto-scroll runs before the status changes, so new rows would open below a following window's view.
+    -- Regression: status_animation.test.lua::"scrolls a window that follows the end to show added rows"
+    if grew then
+        self:_scroll_following_windows(line_count)
+    end
+end
+
+--- @return integer count Virtual lines on screen now
+function StatusAnimation:_count_drawn_lines()
+    if not self._extmark_id then
+        return 0
+    end
+
+    local mark = vim.api.nvim_buf_get_extmark_by_id(
+        self._bufnr,
+        NS_ANIMATION,
+        self._extmark_id,
+        { details = true }
+    )
+    local details = mark[3]
+    return details and details.virt_lines and #details.virt_lines or 0
+end
+
+--- A window with its cursor on the last line follows the end, as auto-scroll leaves it.
+--- @param line_count integer
+function StatusAnimation:_scroll_following_windows(line_count)
+    for _, winid in ipairs(vim.fn.win_findbuf(self._bufnr)) do
+        if
+            BufHelpers.is_win_usable(winid)
+            and vim.api.nvim_win_get_cursor(winid)[1] == line_count
+        then
+            vim.api.nvim_win_call(winid, function()
+                vim.cmd("noautocmd normal! zb")
+            end)
+        end
+    end
 end
 
 --- @return agentic.ui.StatusAnimation.VirtLine spinner_line
