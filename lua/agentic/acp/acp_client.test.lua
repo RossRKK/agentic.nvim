@@ -1410,6 +1410,7 @@ describe("ACPClient", function()
             elicitation = true,
             nes = true,
             positionEncodings = true,
+            subagents = true,
             _meta = true,
         }
 

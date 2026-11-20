@@ -118,6 +118,7 @@ function ACPClient:new(config, on_ready)
                     boolean = vim.empty_dict(),
                 },
             },
+            subagents = vim.empty_dict(),
         },
         auth_methods = {},
         ready_listeners = {},
