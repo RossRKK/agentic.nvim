@@ -58,6 +58,12 @@ Chat-buffer content, tool-call blocks, permissions: skill
     returns without rescheduling when its scheduled epoch no longer matches.
     Regression:
     `status_animation.test.lua::"drops a stale frame instead of scheduling a successor"`.
+- A second virtual-lines extmark below the chat's last line
+  - Virtual lines of extmarks on one line draw in the order the extmarks were
+    last placed, so two that are redrawn on their own swap places. Draw anything
+    that belongs at the end of the chat through `StatusAnimation:set_footer`,
+    which shares the spinner's extmark. Regression:
+    `status_animation.test.lua::"draws the footer below the spinner"`.
 - Two windows holding the chat buffer concurrently
   - Breaks fold-state preservation. ADR 0001.
 - `:edit` on a widget buffer

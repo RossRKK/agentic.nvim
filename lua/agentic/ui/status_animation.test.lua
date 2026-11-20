@@ -225,4 +225,54 @@ describe("agentic.ui.StatusAnimation", function()
             assert.equal(1, #chunks)
         end)
     end)
+
+    describe("footer", function()
+        local FOOTER = {
+            { { "first sub-agent", "Comment" } },
+            { { "second sub-agent", "Comment" } },
+        }
+
+        --- @return table[]|nil virt_lines
+        local function virt_lines()
+            local marks = extmarks()
+            return marks[1] and marks[1][4].virt_lines
+        end
+
+        it("draws the footer below the spinner", function()
+            animation:start("generating")
+            animation:set_footer(FOOTER)
+
+            local lines = virt_lines()
+            assert.is_not_nil(lines)
+            ---@cast lines table[]
+            assert.equal(5, #lines)
+            assert.is_true(lines[2][1][1]:find("generating") ~= nil)
+            assert.equal(FOOTER, { lines[4], lines[5] })
+        end)
+
+        it("keeps the footer after the spinner stops", function()
+            animation:start("generating")
+            animation:set_footer(FOOTER)
+
+            animation:stop()
+
+            assert.equal({ { { "" } }, FOOTER[1], FOOTER[2] }, virt_lines())
+        end)
+
+        it("keeps the footer below appended lines with no spinner", function()
+            animation:set_footer(FOOTER)
+
+            vim.api.nvim_buf_set_lines(bufnr, -1, -1, false, { "three" })
+
+            assert.equal(2, extmarks()[1][2])
+        end)
+
+        it("clears once the footer is empty and the spinner stopped", function()
+            animation:set_footer(FOOTER)
+
+            animation:set_footer({})
+
+            assert.equal(0, #extmarks())
+        end)
+    end)
 end)
