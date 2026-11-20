@@ -131,6 +131,18 @@ local SENDER_MAP = {
     tool_call = "agent",
 }
 
+--- A sender heading; an empty icon leaves no gap where it would be.
+--- @param marker string
+--- @param icon string|nil
+--- @param text string
+--- @return string heading
+local function sender_heading(marker, icon, text)
+    if icon == nil or icon == "" then
+        return marker .. " " .. text
+    end
+    return string.format("%s %s %s", marker, icon, text)
+end
+
 --- Writes a sender header to the buffer if the sender changed
 --- @param session_update_type string
 --- @return boolean header_written
@@ -151,19 +163,17 @@ function MessageWriter:_maybe_write_sender_header(session_update_type)
     local header = ""
 
     if sender == "user" then
-        local icon = icons.user or ""
-        header = string.format("## %s User", icon)
+        header = sender_heading("##", icons.user, "User")
 
         if not self._is_restoring then
             header =
                 string.format("%s - %s", header, os.date("%Y-%m-%d %H:%M:%S"))
         end
     else
-        local icon = icons.agent or ""
         local name = self._agent_name and self._agent_name()
             or self._provider_name
             or "unknown"
-        header = string.format("### %s Agent - %s", icon, name)
+        header = sender_heading("###", icons.agent, "Agent - " .. name)
     end
 
     BufHelpers.with_modifiable(self.bufnr, function()

@@ -1292,7 +1292,7 @@ You can customize the icons used in the permission approval workflow:
 ### Customizing Chat Icons
 
 You can customize the icons used to identify user and agent messages in the
-chat:
+chat. An empty string leaves the heading without one:
 
 ```lua
 {

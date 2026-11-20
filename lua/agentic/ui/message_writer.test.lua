@@ -1646,6 +1646,22 @@ describe("agentic.ui.MessageWriter", function()
             assert.equal(1, count_matching_lines("### .* Agent %- TestAgent$"))
         end)
 
+        it("leaves no gap for empty chat icons", function()
+            local original_icons = Config.chat_icons
+            Config.chat_icons = { user = "", agent = "" }
+            writer:set_provider_name("TestAgent")
+            writer:write_restoring_message(
+                make_update("question", "user_message_chunk")
+            )
+            writer:write_message_chunk(
+                make_update("response", "agent_message_chunk")
+            )
+            Config.chat_icons = original_icons
+
+            assert.equal(1, count_matching_lines("^## User$"))
+            assert.equal(1, count_matching_lines("^### Agent %- TestAgent$"))
+        end)
+
         it("skips header for consecutive same sender", function()
             writer:write_message_chunk(
                 make_update("msg1", "user_message_chunk")
