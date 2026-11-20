@@ -863,8 +863,8 @@ describe("agentic: switch_provider", function()
         -- Avoids a real RPC call
         local stop_generation_stub =
             track_stub(session.agent, "stop_generation")
-        local permission_clear_stub =
-            track_stub(session.permission_manager, "clear")
+        local permission_cancel_stub =
+            track_stub(session.permission_manager, "cancel_session")
         local anim_stop_spy = track_stub(session.status_animation, "stop")
 
         Agentic.stop_generation()
@@ -874,32 +874,66 @@ describe("agentic: switch_provider", function()
         assert
             .spy(stop_generation_stub).was
             .called_with(session.agent, "test-session-id")
-        assert.spy(permission_clear_stub).was.called(1)
+        assert
+            .spy(permission_cancel_stub).was
+            .called_with(session.permission_manager, "test-session-id")
         assert.is_false(session.is_generating)
         assert.spy(anim_stop_spy).was.called(1)
     end)
 
-    it("stop_generation stops the named session, not the current one", function()
-        local Agentic = require("agentic")
+    it(
+        "stop_generation stops the named session, not the current one",
+        function()
+            local Agentic = require("agentic")
 
-        local named = create_session()
-        named.session_id = "named-session-id" --[[@as string]]
-        named.is_generating = true
-        local current = create_session()
-        current.session_id = "current-session-id" --[[@as string]]
-        current.is_generating = true
-        assert.equal(current, SessionRegistry.current())
+            local named = create_session()
+            named.session_id = "named-session-id" --[[@as string]]
+            named.is_generating = true
+            local current = create_session()
+            current.session_id = "current-session-id" --[[@as string]]
+            current.is_generating = true
+            assert.equal(current, SessionRegistry.current())
 
-        local stop_generation_stub = track_stub(named.agent, "stop_generation")
+            local stop_generation_stub =
+                track_stub(named.agent, "stop_generation")
 
-        Agentic.stop_generation({ session = named.session_key })
+            Agentic.stop_generation({ session = named.session_key })
 
-        assert
-            .spy(stop_generation_stub).was
-            .called_with(named.agent, "named-session-id")
-        assert.is_false(named.is_generating)
-        assert.is_true(current.is_generating)
-    end)
+            assert
+                .spy(stop_generation_stub).was
+                .called_with(named.agent, "named-session-id")
+            assert.is_false(named.is_generating)
+            assert.is_true(current.is_generating)
+        end
+    )
+
+    it(
+        "stop_generation leaves a running sub-agent's permission prompt open",
+        function()
+            local Agentic = require("agentic")
+
+            local session = create_session()
+            session.session_id = "parent-session-id" --[[@as string]]
+            session.is_generating = true
+            local answers = {}
+            for _, session_id in ipairs({
+                "parent-session-id",
+                "child-session-id",
+            }) do
+                session.permission_manager:add_request({
+                    sessionId = session_id,
+                    toolCall = { toolCallId = "tc-" .. session_id },
+                    options = {},
+                }, function(option_id)
+                    answers[session_id] = option_id or "cancelled"
+                end)
+            end
+
+            Agentic.stop_generation({ session = session.session_key })
+
+            assert.equal({ ["parent-session-id"] = "cancelled" }, answers)
+        end
+    )
 
     -- Creation spawns a provider subprocess. Stopping generation with nothing
     -- live used to create a session only to immediately reset it: a no-op with

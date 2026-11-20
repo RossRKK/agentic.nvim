@@ -33,7 +33,7 @@ describe("agentic.ui.PermissionManager", function()
     --- Build a permission request with the given tool_call_id. Defaults to
     --- one allow_once + one reject_once option; pass opts.options to override.
     --- @param tool_call_id string
-    --- @param opts { options?: agentic.acp.PermissionOption[] }|nil
+    --- @param opts { options?: agentic.acp.PermissionOption[], session_id?: string }|nil
     --- @return agentic.acp.RequestPermission
     local function make_request(tool_call_id, opts)
         local options = opts and opts.options
@@ -50,7 +50,7 @@ describe("agentic.ui.PermissionManager", function()
                 },
             }
         return {
-            sessionId = "test-session",
+            sessionId = opts and opts.session_id or "test-session",
             toolCall = { toolCallId = tool_call_id },
             options = options,
         }
@@ -996,6 +996,37 @@ describe("agentic.ui.PermissionManager", function()
             assert.is_false(has_buf_keymap("n", "<C-N>"))
             assert.is_false(has_buf_keymap("n", "<C-P>"))
         end)
+    end)
+
+    -- ACP: a cancelled session answers its own prompts; a running sub-agent keeps its.
+    describe("cancel_session", function()
+        it(
+            "answers only the named session's requests, focusing the rest",
+            function()
+                seed_block("tc-parent")
+                seed_block("tc-child")
+
+                local cb_parent = spy.new(function() end)
+                local cb_child = spy.new(function() end)
+
+                pm:add_request(
+                    make_request("tc-parent", { session_id = "parent" }),
+                    cb_parent --[[@as function]]
+                )
+                pm:add_request(
+                    make_request("tc-child", { session_id = "child" }),
+                    cb_child --[[@as function]]
+                )
+
+                pm:cancel_session("parent")
+
+                assert.spy(cb_parent).was.called(1)
+                assert.is_nil(cb_parent.calls[1][1])
+                assert.spy(cb_child).was.called(0)
+                assert.equal("tc-child", pm.focused_id)
+                assert.is_true(has_buf_keymap("n", "1"))
+            end
+        )
     end)
 
     describe("resolve hygiene", function()

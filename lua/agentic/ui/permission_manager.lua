@@ -293,6 +293,20 @@ function PermissionManager:clear()
     self.focused_id = nil
 end
 
+--- `resolve` with a nil option_id for each request of ACP session `session_id`, as its cancel requires.
+--- A sub-agent's requests carry its own session id, so they outlive a cancel of its parent.
+--- @param session_id string
+function PermissionManager:cancel_session(session_id)
+    --- @type string[]
+    local ids = vim.list_extend({}, self._order)
+
+    for _, tool_call_id in ipairs(ids) do
+        if self.pending[tool_call_id].request.sessionId == session_id then
+            self:resolve(tool_call_id, nil)
+        end
+    end
+end
+
 --- `resolve` with a nil option_id, for a tool call that failed before being granted.
 --- @param tool_call_id string
 function PermissionManager:remove_request_by_tool_call_id(tool_call_id)
