@@ -2550,6 +2550,7 @@ describe("ACPClient", function()
                             parent_session_id = "s1",
                             title = "Run sleep and cat notes",
                             description = "general-purpose",
+                            capabilities = { cancel = true },
                             state = { kind = "running" },
                         },
                     },
@@ -2581,6 +2582,36 @@ describe("ACPClient", function()
                 drain(queue)
 
                 assert.equal(case.parsed, received[1].args[1].state)
+            end)
+        end
+
+        -- The transport decodes JSON null as nil, so `capabilities: null` reads as absent: unchanged.
+        local CAPABILITIES = {
+            {
+                name = "cancel granted",
+                wire = { cancel = {} },
+                parsed = { cancel = true },
+            },
+            {
+                name = "cancel withheld",
+                wire = {},
+                parsed = { cancel = false },
+            },
+            { name = "capabilities unchanged", wire = nil, parsed = nil },
+        }
+
+        for _, case in ipairs(CAPABILITIES) do
+            it("parses " .. case.name, function()
+                local _, queue = client_with_parent()
+
+                deliver_update("s1", {
+                    sessionUpdate = "subagent_update",
+                    sessionId = "c1",
+                    capabilities = case.wire,
+                })
+                drain(queue)
+
+                assert.equal(case.parsed, received[1].args[1].capabilities)
             end)
         end
 

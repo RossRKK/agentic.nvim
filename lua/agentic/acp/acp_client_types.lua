@@ -32,12 +32,17 @@
 --- @field stop_reason? string Only on `idle`
 --- @field name? string The wire value of an `unrecognized` state
 
+--- What the client may do to a child session, from `subagent_update.capabilities`.
+--- @class agentic.acp.SubagentCapabilities
+--- @field cancel boolean `session/cancel` on the child stops its current work
+
 --- One `subagent_update`: absent fields leave the association unchanged.
 --- @class agentic.acp.SubagentAssociation
 --- @field child_session_id string
 --- @field parent_session_id string
 --- @field title? string
 --- @field description? string
+--- @field capabilities? agentic.acp.SubagentCapabilities
 --- @field state? agentic.acp.SubagentWorkState
 
 --- @class agentic.acp.InitializeParams

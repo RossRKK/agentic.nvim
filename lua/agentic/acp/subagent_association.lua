@@ -27,9 +27,21 @@ function M.parse(parent_session_id, update)
         description = type(update.description) == "string"
                 and update.description
             or nil,
+        capabilities = M._parse_capabilities(update.capabilities),
         state = M._parse_state(update.state),
     }
     return association
+end
+
+--- The set is replaced whole, and an omitted or null `cancel` withholds it.
+--- @param capabilities any
+--- @return agentic.acp.SubagentCapabilities|nil capabilities nil leaves the child's unchanged
+function M._parse_capabilities(capabilities)
+    if type(capabilities) ~= "table" then
+        return nil
+    end
+
+    return { cancel = type(capabilities.cancel) == "table" }
 end
 
 --- @param state any
