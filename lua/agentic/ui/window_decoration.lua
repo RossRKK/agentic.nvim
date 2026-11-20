@@ -487,7 +487,10 @@ function WindowDecoration.render_header(
 
         local text = (header_text and header_text ~= "") and header_text or ""
 
-        set_winbar(winid, text)
+        -- A host window's winbar belongs to its owner.
+        if not (owner and winid == owner.host_winid) then
+            set_winbar(winid, text)
+        end
         -- The plain title, not the rich winbar text, whose "/" and "$" corrupt buffer basenames.
         set_buffer_name(
             bufnr,

@@ -2314,3 +2314,174 @@ describe("agentic.ui.ChatWidget WinClosed size memory (child)", function()
         )
     end)
 end)
+
+describe("agentic.ui.ChatWidget in a host window (child)", function()
+    local child = Child.new()
+
+    before_each(function()
+        child.setup()
+        child.lua([[
+            local ChatWidget = require("agentic.ui.chat_widget")
+            _G.editor = vim.api.nvim_get_current_win()
+            vim.cmd("botright vsplit")
+            _G.host = vim.api.nvim_get_current_win()
+            _G.owner_buf = vim.api.nvim_create_buf(false, true)
+            vim.api.nvim_win_set_buf(_G.host, _G.owner_buf)
+            vim.api.nvim_set_current_win(_G.editor)
+            _G.widget = ChatWidget:new(function() return true end)
+        ]])
+    end)
+
+    after_each(function()
+        child.stop()
+    end)
+
+    it("shows the chat in the host and stacks the input under it", function()
+        child.lua([[
+            -- Stacked even where the configured layout would put the input beside the chat.
+            require("agentic.config").windows.position = "bottom"
+            _G.split_count = function()
+                return #vim.tbl_filter(function(w)
+                    return vim.api.nvim_win_get_config(w).relative == ""
+                end, vim.api.nvim_tabpage_list_wins(0))
+            end
+            _G.wins_before = _G.split_count()
+            _G.widget:show({ win = _G.host, focus_prompt = false })
+        ]])
+        child.flush()
+
+        assert.equal(
+            child.lua_get("_G.host"),
+            child.lua_get("_G.widget.win_nrs.chat")
+        )
+        assert.equal(
+            child.lua_get("_G.widget.buf_nrs.chat"),
+            child.lua_get("vim.api.nvim_win_get_buf(_G.host)")
+        )
+        -- Only the input is new: no chat split was opened beside the host.
+        assert.equal(
+            child.lua_get("_G.wins_before + 1"),
+            child.lua_get("_G.split_count()")
+        )
+        assert.equal(
+            child.lua_get("vim.api.nvim_win_get_position(_G.host)[2]"),
+            child.lua_get(
+                "vim.api.nvim_win_get_position(_G.widget.win_nrs.input)[2]"
+            )
+        )
+    end)
+
+    it(
+        "leaves the host open on hide, for its owner to show another buffer",
+        function()
+            child.lua([[
+            _G.widget:show({ win = _G.host, focus_prompt = false })
+            _G.input = _G.widget.win_nrs.input
+            _G.widget:hide()
+            vim.api.nvim_set_current_win(_G.host)
+            vim.api.nvim_set_current_buf(_G.owner_buf)
+        ]])
+            child.flush()
+
+            assert.is_true(child.lua_get("vim.api.nvim_win_is_valid(_G.host)"))
+            assert.is_false(
+                child.lua_get("vim.api.nvim_win_is_valid(_G.input)")
+            )
+            assert.equal(
+                child.lua_get("_G.owner_buf"),
+                child.lua_get("vim.api.nvim_win_get_buf(_G.host)")
+            )
+        end
+    )
+
+    it("stops guarding the host once it has left it", function()
+        child.lua([[
+            _G.widget:show({ win = _G.host, focus_prompt = false })
+            _G.widget:hide()
+            _G.widget:show({ focus_prompt = false })
+            vim.api.nvim_set_current_win(_G.host)
+            vim.api.nvim_set_current_buf(_G.owner_buf)
+        ]])
+        child.flush()
+
+        assert.is_true(child.lua_get("_G.widget:is_open()"))
+        assert.equal(
+            child.lua_get("_G.owner_buf"),
+            child.lua_get("vim.api.nvim_win_get_buf(_G.host)")
+        )
+    end)
+
+    it("keeps the host open when the user closes the input", function()
+        child.lua([[
+            _G.widget:show({ win = _G.host, focus_prompt = false })
+            vim.api.nvim_win_close(_G.widget.win_nrs.input, true)
+        ]])
+        child.flush()
+
+        assert.is_false(child.lua_get("_G.widget:is_open()"))
+        assert.is_true(child.lua_get("vim.api.nvim_win_is_valid(_G.host)"))
+    end)
+
+    it("does not take back a host its owner gave another buffer", function()
+        child.lua([[
+            _G.widget:show({ win = _G.host, focus_prompt = false })
+            _G.input = _G.widget.win_nrs.input
+            vim.api.nvim_win_set_buf(_G.host, _G.owner_buf)
+        ]])
+        child.flush()
+
+        assert.is_false(child.lua_get("_G.widget:is_open()"))
+
+        child.lua([[ _G.widget:show({ focus_prompt = false }) ]])
+        child.flush()
+
+        assert.equal(
+            child.lua_get("_G.owner_buf"),
+            child.lua_get("vim.api.nvim_win_get_buf(_G.host)")
+        )
+        assert.is_true(child.lua_get("_G.widget.win_nrs.chat ~= _G.host"))
+        assert.is_false(child.lua_get("vim.api.nvim_win_is_valid(_G.input)"))
+    end)
+
+    it("closes its own chat split when moving into a host", function()
+        child.lua([[
+            _G.widget:show({ focus_prompt = false })
+            _G.split_chat = _G.widget.win_nrs.chat
+            _G.widget:show({ win = _G.host, focus_prompt = false })
+        ]])
+        child.flush()
+
+        assert.is_false(
+            child.lua_get("vim.api.nvim_win_is_valid(_G.split_chat)")
+        )
+        assert.equal(
+            child.lua_get("_G.widget.buf_nrs.chat"),
+            child.lua_get("vim.api.nvim_win_get_buf(_G.host)")
+        )
+    end)
+
+    it("keeps the host open when the widget is destroyed", function()
+        child.lua([[
+            _G.widget:show({ win = _G.host, focus_prompt = false })
+            _G.widget:destroy()
+        ]])
+        child.flush()
+
+        assert.is_true(child.lua_get("vim.api.nvim_win_is_valid(_G.host)"))
+    end)
+
+    it("leaves the host's winbar to its owner", function()
+        child.lua([[ _G.widget:show({ win = _G.host, focus_prompt = false }) ]])
+        child.flush()
+        child.lua([[
+            vim.wo[_G.host][0].winbar = "owner"
+            _G.widget:render_header("chat")
+        ]])
+        child.flush()
+
+        assert.equal("owner", child.lua_get("vim.wo[_G.host].winbar"))
+        assert.is_true(
+            child.lua_get("vim.wo[_G.widget.win_nrs.input].winbar ~= ''")
+        )
+    end)
+end)

@@ -476,6 +476,11 @@ agentic.toggle({opts})
                                         Default: `true`.
       `focus_prompt`         (boolean)  Move cursor to prompt.
                                         Default: `true`.
+      `win`                  (integer)  Show the chat in this window
+                                        instead of a sidebar, with the
+                                        prompt and panels stacked under
+                                        it. Hiding never closes it, and
+                                        its winbar is left alone.
 
                                                         *agentic.open()*
 agentic.open({opts})

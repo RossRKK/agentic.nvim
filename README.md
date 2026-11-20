@@ -677,6 +677,16 @@ Open and Toggle supports optional parameter:
 require("agentic").open({ auto_add_to_context = false })
 ```
 
+- **win** (integer) - Show the chat in this window instead of opening a
+  sidebar, stacking the prompt and other panels under it. The window stays
+  yours: hiding the chat closes only the windows Agentic opened, and leaves
+  whatever the window shows next to you. Its winbar is left alone.
+
+```lua
+-- Show the chat in the current window
+require("agentic").open({ win = vim.api.nvim_get_current_win() })
+```
+
 When adding files or selections to context, you can also specify whether to
 focus the prompt input after opening the chat:
 

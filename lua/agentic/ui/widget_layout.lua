@@ -12,6 +12,7 @@ local Logger = require("agentic.utils.logger")
 --- @field focus_prompt? boolean
 --- @field position agentic.UserConfig.Windows.Position
 --- @field size? agentic.ui.ChatWidget.Size Overrides the configured size on this layout's axis
+--- @field host_win? integer Caller-owned window that shows the chat instead of a split
 --- @field with_programmatic_close? fun(fn: fun())
 
 --- @class agentic.ui.WidgetLayout
@@ -221,6 +222,20 @@ local function get_or_create_window(
     return new_winid
 end
 
+--- @param win_nrs agentic.ui.ChatWidget.WinNrs
+--- @param host_win integer
+--- @param bufnr integer Chat buffer, already shown in `host_win`
+--- @param win_opts table<string, any>
+local function adopt_host_window(win_nrs, host_win, bufnr, win_opts)
+    if win_nrs.chat == host_win then
+        return
+    end
+
+    win_nrs.chat = host_win
+    apply_panel_window_opts(host_win, bufnr, "chat", win_opts)
+    WindowDecoration.render_header(bufnr, "chat")
+end
+
 --- @param buf_nrs agentic.ui.ChatWidget.BufNrs
 --- @param win_nrs agentic.ui.ChatWidget.WinNrs
 --- @param window_name agentic.ui.ChatWidget.PanelNames
@@ -297,13 +312,27 @@ local function show_layout(params, position)
             or WidgetLayout.calculate_width(Config.windows.width)
     end
 
-    get_or_create_window(win_nrs, "chat", buf_nrs.chat, chat_opts, {
+    local chat_win_opts = {
         scrolloff = 4,
         statuscolumn = ToolBlockBorder.STATUSCOLUMN_EXPR,
         winhighlight = CHAT_GUTTER_WINHIGHLIGHT,
         winfixheight = is_bottom,
         winfixwidth = not is_bottom,
-    }, expected_tabpage, with_close)
+    }
+
+    if params.host_win then
+        adopt_host_window(win_nrs, params.host_win, buf_nrs.chat, chat_win_opts)
+    else
+        get_or_create_window(
+            win_nrs,
+            "chat",
+            buf_nrs.chat,
+            chat_opts,
+            chat_win_opts,
+            expected_tabpage,
+            with_close
+        )
+    end
 
     Fold.setup_window(win_nrs.chat, buf_nrs.chat)
 
@@ -427,7 +456,8 @@ end
 
 --- @param params agentic.ui.WidgetLayout.Params
 function WidgetLayout.open(params)
-    local position = params.position
+    -- The caller sized and placed the host, so the panels stack inside its column.
+    local position = params.host_win and "right" or params.position
 
     if position ~= "right" and position ~= "left" and position ~= "bottom" then
         Logger.notify(
@@ -454,14 +484,28 @@ function WidgetLayout.open(params)
 end
 
 --- @param win_nrs agentic.ui.ChatWidget.WinNrs
-function WidgetLayout.close(win_nrs)
+--- @param host_win integer|nil Caller-owned window, left open
+function WidgetLayout.close(win_nrs, host_win)
     for name, winid in pairs(win_nrs) do
         win_nrs[name] = nil
         -- `is_win_usable`, not bare validity: on 0.11.5 Linux tabclose leaves
         -- handles that answer valid but segfault in `nvim_win_close`.
-        if BufHelpers.is_win_usable(winid) then
+        if winid ~= host_win and BufHelpers.is_win_usable(winid) then
             pcall(vim.api.nvim_win_close, winid, true)
         end
+    end
+
+    -- Untagged, or BufferGuard would push out whatever its owner shows next.
+    if host_win and BufHelpers.is_win_usable(host_win) then
+        vim.w[host_win].agentic_bufnr = nil
+    end
+end
+
+--- @param host_win integer
+--- @param bufnr integer Chat buffer
+function WidgetLayout.enter_host_window(host_win, bufnr)
+    if vim.api.nvim_win_get_buf(host_win) ~= bufnr then
+        vim.api.nvim_win_set_buf(host_win, bufnr)
     end
 end
 

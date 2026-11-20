@@ -33,6 +33,7 @@ local WidgetLayout = require("agentic.ui.widget_layout")
 
 --- @class agentic.ui.ChatWidget.ShowOpts : agentic.ui.ChatWidget.AddToContextOpts
 --- @field auto_add_to_context? boolean
+--- @field win? integer Show the chat in this window instead of a split. The caller owns it: hiding never closes it
 
 --- @class agentic.ui.ChatWidget
 --- @field buf_nrs agentic.ui.ChatWidget.BufNrs
@@ -43,6 +44,7 @@ local WidgetLayout = require("agentic.ui.widget_layout")
 --- @field _closing? boolean True during programmatic window closes
 --- @field _avoid_auto_close_cmd fun(self: agentic.ui.ChatWidget, fn: fun())
 --- @field _hidden_chat_winid? integer
+--- @field host_winid? integer Caller-owned window the chat shows in, from `ShowOpts.win`; nil once hidden
 --- @field size? agentic.ui.ChatWidget.Size Size to reopen at, refreshed on every `hide`
 --- @field session_key? integer Registry key, published by `SessionRegistry.create`
 --- @field name_suffixed? boolean Sticky latch owned by `WindowDecoration`: once a second session coexisted, this widget's buffer names keep their " (N)" suffix. Never cleared
@@ -73,6 +75,14 @@ end
 function ChatWidget:get_visible_tab_id()
     local winid = self.win_nrs.chat
     if not winid or not vim.api.nvim_win_is_valid(winid) then
+        return nil
+    end
+
+    -- Its owner can show another buffer there without telling us.
+    if
+        winid == self.host_winid
+        and vim.api.nvim_win_get_buf(winid) ~= self.buf_nrs.chat
+    then
         return nil
     end
 
@@ -115,6 +125,19 @@ end
 function ChatWidget:show(opts)
     opts = opts or {}
 
+    local host = opts.win or (self:is_open() and self.host_winid or nil)
+    local moving_in = host and self:is_open() and self.win_nrs.chat ~= host
+    local leaving = self.host_winid and self.host_winid ~= host
+    if moving_in or leaving then
+        -- keep_insert: the show below follows this tick
+        self:hide(true)
+    end
+    self.host_winid = host
+
+    if host then
+        WidgetLayout.enter_host_window(host, self.buf_nrs.chat)
+    end
+
     self:_close_hidden_chat_window()
 
     self.size = self.size or self:_inherited_size()
@@ -126,6 +149,7 @@ function ChatWidget:show(opts)
         focus_prompt = opts.focus_prompt,
         position = self.current_position,
         size = self.size,
+        host_win = host,
         with_programmatic_close = function(fn)
             self:_avoid_auto_close_cmd(fn)
         end,
@@ -251,8 +275,9 @@ function ChatWidget:hide(keep_insert, tabpage)
     self:_ensure_fallback_window(tabpage)
 
     self:_avoid_auto_close_cmd(function()
-        WidgetLayout.close(self.win_nrs)
+        WidgetLayout.close(self.win_nrs, self.host_winid)
     end)
+    self.host_winid = nil
 
     -- The chat buffer's only remaining window; ADR 0001's manual folds die with it. Close first, or the winid leaks.
     self:_close_hidden_chat_window()
@@ -286,7 +311,12 @@ end
 --- Must run BEFORE `WidgetLayout.close`, which nils `win_nrs`.
 function ChatWidget:_remember_size()
     local winid = self.win_nrs.chat
-    if not winid or not self:get_visible_tab_id() then
+    -- A host's size is its owner's, not one to reopen a split at.
+    if
+        not winid
+        or winid == self.host_winid
+        or not self:get_visible_tab_id()
+    then
         return
     end
 
@@ -328,8 +358,11 @@ function ChatWidget:destroy()
         self._winclosed_augroup = nil
     end
 
+    -- Deleting the chat buffer would close the host along with it.
+    self:_vacate_host()
+
     -- Not through `hide`: it would reopen a float over deleted buffers.
-    WidgetLayout.close(self.win_nrs)
+    WidgetLayout.close(self.win_nrs, self.host_winid)
 
     self:_close_hidden_chat_window()
 
@@ -348,6 +381,21 @@ function ChatWidget:destroy()
             )
         end
     end
+end
+
+function ChatWidget:_vacate_host()
+    local host = self.host_winid
+    if
+        not host
+        or not BufHelpers.is_win_usable(host)
+        or vim.api.nvim_win_get_buf(host) ~= self.buf_nrs.chat
+    then
+        return
+    end
+
+    local scratch = vim.api.nvim_create_buf(false, true)
+    vim.bo[scratch].bufhidden = "wipe"
+    vim.api.nvim_win_set_buf(host, scratch)
 end
 
 function ChatWidget:_submit_input()

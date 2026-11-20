@@ -128,6 +128,32 @@ Regression:
   once `win_nrs` was repointed. Regression:
   `lua/agentic/ui/widget_layout.test.lua::"creates a fresh chat window when the cached one is in another tab"`.
 
+## Host windows
+
+`ChatWidget:show({ win = host })` puts the chat buffer in a window the caller
+owns and stacks the other panels under it (`WidgetLayout.enter_host_window`,
+then `show_layout` adopts it). `ChatWidget.host_winid` holds it only while the
+widget shows there. Tests: `chat_widget.test.lua` group
+`"agentic.ui.ChatWidget in a host window (child)"`.
+
+- Never close the host. `WidgetLayout.close` takes the host and skips it; a
+  close there ends the caller's layout (a side panel, a tab). Regressions:
+  `::"leaves the host open on hide, for its owner to show another buffer"`,
+  `::"keeps the host open when the user closes the input"`.
+- `destroy` swaps a scratch buffer into a host still showing the chat
+  (`ChatWidget:_vacate_host`): deleting a buffer closes every window showing
+  it. Regression: `::"keeps the host open when the widget is destroyed"`.
+- `WidgetLayout.close` clears the host's `agentic_bufnr`. Left set, a later
+  visible session's `BufferGuard` pulls the chat back into the host when its
+  owner shows another buffer. Regression:
+  `::"stops guarding the host once it has left it"`.
+- The owner can show another buffer in the host without calling `hide`, so
+  `get_visible_tab_id` answers nil for a host not showing the chat, and the
+  next `show` releases it instead of reusing it. Regression:
+  `::"does not take back a host its owner gave another buffer"`.
+- The host's winbar is its owner's: `WindowDecoration.render_header` skips it.
+  Regression: `::"leaves the host's winbar to its owner"`.
+
 ## Hidden chat float
 
 A hidden chat floating window keeps the chat buffer attached while the widget
