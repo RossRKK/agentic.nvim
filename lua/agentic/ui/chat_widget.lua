@@ -135,7 +135,11 @@ function ChatWidget:show(opts)
     self.host_winid = host
 
     if host then
-        WidgetLayout.enter_host_window(host, self.buf_nrs.chat)
+        WidgetLayout.enter_host_window(
+            host,
+            self.buf_nrs.chat,
+            self._hidden_chat_winid
+        )
     end
 
     self:_close_hidden_chat_window()
@@ -274,15 +278,16 @@ function ChatWidget:hide(keep_insert, tabpage)
 
     self:_ensure_fallback_window(tabpage)
 
+    local host = self.host_winid
     self:_avoid_auto_close_cmd(function()
-        WidgetLayout.close(self.win_nrs, self.host_winid)
+        WidgetLayout.close(self.win_nrs, host)
     end)
     self.host_winid = nil
 
     -- The chat buffer's only remaining window; ADR 0001's manual folds die with it. Close first, or the winid leaks.
     self:_close_hidden_chat_window()
     self._hidden_chat_winid =
-        WidgetLayout.open_hidden_chat_window(self.buf_nrs.chat)
+        WidgetLayout.open_hidden_chat_window(self.buf_nrs.chat, host)
 end
 
 --- Closing a tab's last window destroys that tab, silently when it is not the current one.

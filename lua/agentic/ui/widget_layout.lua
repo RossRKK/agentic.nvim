@@ -421,8 +421,9 @@ local function show_layout(params, position)
 end
 
 --- @param bufnr integer Chat buffer
+--- @param host_win integer|nil A host still showing the chat, whose folds nvim does not hand a new window
 --- @return integer|nil winid nil on failure (graceful degradation)
-function WidgetLayout.open_hidden_chat_window(bufnr)
+function WidgetLayout.open_hidden_chat_window(bufnr, host_win)
     -- The CONFIGURED width, not the visible chat's real one, so
     -- `nvim_win_text_height` has a stable basis while hidden (ADR 0001).
     local width = WidgetLayout.calculate_width(Config.windows.width)
@@ -450,6 +451,14 @@ function WidgetLayout.open_hidden_chat_window(bufnr)
     })
 
     Fold.setup_window(winid, bufnr)
+
+    if
+        host_win
+        and vim.api.nvim_win_is_valid(host_win)
+        and vim.api.nvim_win_get_buf(host_win) == bufnr
+    then
+        Fold.copy(host_win, winid)
+    end
 
     return winid
 end
@@ -503,9 +512,17 @@ end
 
 --- @param host_win integer
 --- @param bufnr integer Chat buffer
-function WidgetLayout.enter_host_window(host_win, bufnr)
+--- @param hidden_chat_winid integer|nil Holds the folds made while hidden
+function WidgetLayout.enter_host_window(host_win, bufnr, hidden_chat_winid)
     if vim.api.nvim_win_get_buf(host_win) ~= bufnr then
         vim.api.nvim_win_set_buf(host_win, bufnr)
+    end
+
+    Fold.setup_window(host_win, bufnr)
+
+    -- Nvim gives a window back its own last folds for a buffer, so a host that showed the chat before reopens stale ones (ADR 0001).
+    if hidden_chat_winid and vim.api.nvim_win_is_valid(hidden_chat_winid) then
+        Fold.copy(hidden_chat_winid, host_win)
     end
 end
 

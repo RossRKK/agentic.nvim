@@ -2470,6 +2470,44 @@ describe("agentic.ui.ChatWidget in a host window (child)", function()
         assert.is_true(child.lua_get("vim.api.nvim_win_is_valid(_G.host)"))
     end)
 
+    it("carries the folds made while hidden into a host it left", function()
+        child.lua([[
+            local Fold = require("agentic.ui.tool_call_fold")
+            local chat = _G.widget.buf_nrs.chat
+            vim.bo[chat].modifiable = true
+            vim.api.nvim_buf_set_lines(chat, 0, -1, false, vim.fn["repeat"]({ "L" }, 60))
+
+            _G.widget:show({ win = _G.host, focus_prompt = false })
+            Fold.close_range(chat, 10, 20)
+            Fold.close_range(chat, 45, 50)
+            vim.api.nvim_win_call(_G.host, function()
+                vim.cmd("45foldopen")
+            end)
+            _G.widget:hide()
+            vim.api.nvim_win_set_buf(_G.host, _G.owner_buf)
+
+            -- Lands in the hidden float, the chat's only window now.
+            Fold.close_range(chat, 30, 40)
+            _G.widget:show({ win = _G.host, focus_prompt = false })
+            _G.folds = vim.api.nvim_win_call(_G.host, function()
+                return {
+                    vim.fn.foldclosed(15),
+                    vim.fn.foldclosed(35),
+                    vim.fn.foldclosedend(35),
+                    vim.fn.foldclosed(47),
+                    vim.fn.foldlevel(47),
+                }
+            end)
+        ]])
+
+        assert.is_true(
+            child.lua_get(
+                "require('agentic.ui.tool_call_fold').threshold() ~= nil"
+            )
+        )
+        assert.equal({ 10, 30, 40, -1, 1 }, child.lua_get("_G.folds"))
+    end)
+
     it("leaves the host's winbar to its owner", function()
         child.lua([[ _G.widget:show({ win = _G.host, focus_prompt = false }) ]])
         child.flush()

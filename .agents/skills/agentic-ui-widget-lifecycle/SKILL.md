@@ -153,6 +153,11 @@ widget shows there. Tests: `chat_widget.test.lua` group
   `::"does not take back a host its owner gave another buffer"`.
 - The host's winbar is its owner's: `WindowDecoration.render_header` skips it.
   Regression: `::"leaves the host's winbar to its owner"`.
+- Folds cross between the host and the hidden float through `Fold.copy`, both
+  ways. Nvim hands a window its own last folds for a buffer, so a host the chat
+  left and came back to reopens stale folds, and a float opened while the host
+  still shows the chat gets an older snapshot. Regression:
+  `::"carries the folds made while hidden into a host it left"`.
 
 ## Hidden chat float
 
