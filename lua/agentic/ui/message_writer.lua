@@ -42,6 +42,7 @@ local TITLE_FENCE = "`````"
 
 --- @class agentic.ui.MessageWriter.ToolCallBlock
 --- @field tool_call_id string
+--- @field parent_tool_call_id? string Agent tool call of the sub-agent that made this call
 --- @field kind? agentic.acp.ToolKind
 --- @field argument? string
 --- @field file_path? string

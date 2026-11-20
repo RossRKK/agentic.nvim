@@ -13,6 +13,23 @@ M.FILE_MUTATING_KINDS = {
     move = true,
 }
 
+--- Claude ACP stamps every update a sub-agent makes with the id of the
+--- Agent/Task tool call that launched it.
+--- @param update { _meta?: table<string, any> }
+--- @return string|nil parent_tool_call_id
+function M.get_parent_tool_call_id(update)
+    local meta = update._meta
+    local claude_code = type(meta) == "table" and meta.claudeCode
+    local parent_id = type(claude_code) == "table"
+        and claude_code.parentToolUseId
+
+    if type(parent_id) == "string" and parent_id ~= "" then
+        return parent_id
+    end
+
+    return nil
+end
+
 --- @param text string|string[]
 --- @return agentic.acp.UserMessageChunk
 function M.generate_user_message(text)

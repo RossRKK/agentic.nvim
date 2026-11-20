@@ -1,3 +1,4 @@
+local ACPPayloads = require("agentic.acp.acp_payloads")
 local Logger = require("agentic.utils.logger")
 local JsonFormat = require("agentic.utils.json_format")
 local transport_module = require("agentic.acp.acp_transport")
@@ -554,6 +555,7 @@ function ACPClient:__build_tool_call_message(update)
     --- @type agentic.ui.MessageWriter.ToolCallBlock
     local message = {
         tool_call_id = update.toolCallId,
+        parent_tool_call_id = ACPPayloads.get_parent_tool_call_id(update),
     }
 
     if update.kind then

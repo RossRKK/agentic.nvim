@@ -2256,6 +2256,41 @@ describe("ACPClient", function()
             assert.is_true(joined:find('"foo": "bar baz"') ~= nil)
         end)
 
+        it("reads the launching tool call of a sub-agent's call", function()
+            local client = create_ready_client()
+
+            ---@diagnostic disable: invisible, assign-type-mismatch
+            local message = client:__build_tool_call_message({
+                toolCallId = "toolu_child",
+                kind = "execute",
+                title = "git status",
+                _meta = {
+                    claudeCode = {
+                        toolName = "Bash",
+                        parentToolUseId = "toolu_agent",
+                    },
+                },
+            })
+            ---@diagnostic enable: invisible, assign-type-mismatch
+
+            assert.equal("toolu_agent", message.parent_tool_call_id)
+        end)
+
+        it("leaves a top-level call without a parent", function()
+            local client = create_ready_client()
+
+            ---@diagnostic disable: invisible, assign-type-mismatch
+            local message = client:__build_tool_call_message({
+                toolCallId = "toolu_top",
+                kind = "execute",
+                title = "git status",
+                _meta = { claudeCode = { toolName = "Bash" } },
+            })
+            ---@diagnostic enable: invisible, assign-type-mismatch
+
+            assert.is_nil(message.parent_tool_call_id)
+        end)
+
         it("does not inject body for empty rawInput", function()
             local client = create_ready_client()
 
