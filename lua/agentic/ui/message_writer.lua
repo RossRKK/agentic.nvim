@@ -49,6 +49,7 @@ local TITLE_FENCE = "`````"
 --- @class agentic.ui.MessageWriter.ToolCallBlock
 --- @field tool_call_id string
 --- @field parent_tool_call_id? string Agent tool call of the sub-agent that made this call
+--- @field subagent_session_id? string Child session that made this call; the call then has no `parent_tool_call_id`
 --- @field kind? agentic.acp.ToolKind
 --- @field argument? string
 --- @field file_path? string
@@ -726,24 +727,38 @@ function MessageWriter:_build_subagent_summary(summary)
     )
 end
 
---- Header of each Agent tool call whose sub-agent has not finished, in chat order.
---- @return agentic.ui.StatusAnimation.VirtLine[] headers
-function MessageWriter:list_running_subagent_headers()
-    --- @type { row: integer, block: agentic.ui.MessageWriter.ToolCallBlock }[]
-    local running = {}
+--- Agent tool calls whose sub-agent has not finished, by their own status.
+--- @return string[] tool_call_ids
+function MessageWriter:list_running_launch_ids()
+    --- @type string[]
+    local ids = {}
     for tool_call_id, block in pairs(self.tool_call_blocks) do
-        local row = self:_get_block_start_row(tool_call_id)
         if
-            row
-            and block.subagent_summary
+            block.subagent_summary
             and block.status ~= "completed"
             and block.status ~= "failed"
         then
-            running[#running + 1] = { row = row, block = block }
+            ids[#ids + 1] = tool_call_id
+        end
+    end
+    return ids
+end
+
+--- The header of each listed block, in chat order.
+--- @param tool_call_ids string[]
+--- @return agentic.ui.StatusAnimation.VirtLine[] headers
+function MessageWriter:list_headers(tool_call_ids)
+    --- @type { row: integer, block: agentic.ui.MessageWriter.ToolCallBlock }[]
+    local listed = {}
+    for _, tool_call_id in ipairs(tool_call_ids) do
+        local block = self.tool_call_blocks[tool_call_id]
+        local row = block and self:_get_block_start_row(tool_call_id)
+        if row then
+            listed[#listed + 1] = { row = row, block = block }
         end
     end
 
-    table.sort(running, function(a, b)
+    table.sort(listed, function(a, b)
         return a.row < b.row
     end)
 
@@ -754,7 +769,7 @@ function MessageWriter:list_running_subagent_headers()
                 Theme.get_status_hl_group(entry.block.status),
             },
         }
-    end, running)
+    end, listed)
 end
 
 --- @param tool_call_block agentic.ui.MessageWriter.ToolCallBlock

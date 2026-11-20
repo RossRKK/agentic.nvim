@@ -62,6 +62,7 @@ describe("ACPClient", function()
         on_error = function() end,
         on_tool_call = function() end,
         on_tool_call_update = function() end,
+        on_subagent_update = function() end,
     }
 
     --- @param agent_caps agentic.acp.AgentCapabilities|nil
@@ -480,6 +481,7 @@ describe("ACPClient", function()
                     on_error = function() end,
                     on_tool_call = function() end,
                     on_tool_call_update = function() end,
+                    on_subagent_update = function() end,
                 }, function(result, err)
                     callback_called = true
                     _G.p5_direct_delivery.callback_fast = vim.in_fast_event()
@@ -527,6 +529,7 @@ describe("ACPClient", function()
                     on_error = function() end,
                     on_tool_call = function() end,
                     on_tool_call_update = function() end,
+                    on_subagent_update = function() end,
                 }
 
                 local function create_request(index)
@@ -1240,6 +1243,7 @@ describe("ACPClient", function()
                 on_error = function() end,
                 on_tool_call = function() end,
                 on_tool_call_update = function() end,
+                on_subagent_update = function() end,
             }
 
             logger_debug_stub:reset()
@@ -1507,6 +1511,7 @@ describe("ACPClient", function()
                 on_error = function() end,
                 on_tool_call = function() end,
                 on_tool_call_update = function() end,
+                on_subagent_update = function() end,
             }
 
             client.subscribers["s1"] = handlers
@@ -1614,6 +1619,7 @@ describe("ACPClient", function()
                     on_error = function() end,
                     on_tool_call = function() end,
                     on_tool_call_update = function() end,
+                    on_subagent_update = function() end,
                     -- `PermissionManager:clear` resolves pending requests with a
                     -- nil option on teardown.
                     on_request_permission = function(_request, callback)
@@ -1707,6 +1713,7 @@ describe("ACPClient", function()
                 on_error = function() end,
                 on_tool_call = function() end,
                 on_tool_call_update = function() end,
+                on_subagent_update = function() end,
                 on_request_permission = function(request, callback)
                     asked(request, callback)
                 end,
@@ -1754,6 +1761,7 @@ describe("ACPClient", function()
                         tool_call_id = message.tool_call_id,
                     }
                 end,
+                on_subagent_update = function() end,
                 on_request_permission = function(request, callback)
                     events[#events + 1] = {
                         event = "request",
@@ -1792,6 +1800,7 @@ describe("ACPClient", function()
                 on_error = function() end,
                 on_tool_call = function() end,
                 on_tool_call_update = function() end,
+                on_subagent_update = function() end,
                 on_request_permission = function()
                     error("boom in on_request_permission")
                 end,
@@ -1837,6 +1846,7 @@ describe("ACPClient", function()
                 on_tool_call_update = function()
                     error("boom in on_tool_call_update")
                 end,
+                on_subagent_update = function() end,
                 on_request_permission = function(request, callback)
                     asked(request, callback)
                 end,
@@ -1877,6 +1887,7 @@ describe("ACPClient", function()
                     on_error = function() end,
                     on_tool_call = function() end,
                     on_tool_call_update = function() end,
+                    on_subagent_update = function() end,
                     on_request_permission = function(request, callback)
                         asked(request, callback)
                     end,
@@ -1922,6 +1933,7 @@ describe("ACPClient", function()
                 on_error = function() end,
                 on_tool_call = function() end,
                 on_tool_call_update = function() end,
+                on_subagent_update = function() end,
                 on_request_permission = function(_request, callback)
                     callback("allow_once")
                     error("boom after answering")
@@ -1990,6 +2002,7 @@ describe("ACPClient", function()
                 on_error = function() end,
                 on_tool_call = function() end,
                 on_tool_call_update = function() end,
+                on_subagent_update = function() end,
                 on_request_permission = function(request, callback)
                     answers[request.toolCall.toolCallId] = callback
                 end,
@@ -2129,6 +2142,7 @@ describe("ACPClient", function()
                 on_error = function() end,
                 on_tool_call = function() end,
                 on_tool_call_update = function() end,
+                on_subagent_update = function() end,
                 on_request_permission = function(request, callback)
                     if request.toolCall.toolCallId == "tc-1" then
                         error("boom in tc-1")
@@ -2216,6 +2230,7 @@ describe("ACPClient", function()
                 on_error = function() end,
                 on_tool_call = function() end,
                 on_tool_call_update = function() end,
+                on_subagent_update = function() end,
                 on_request_permission = function()
                     error("boom in s2")
                 end,

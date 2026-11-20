@@ -13,6 +13,7 @@ describe("SessionStarter", function()
         on_error = function() end,
         on_tool_call = function() end,
         on_tool_call_update = function() end,
+        on_subagent_update = function() end,
     }
 
     --- @param handlers agentic.acp.ClientHandlers

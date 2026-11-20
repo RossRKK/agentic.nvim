@@ -3828,4 +3828,115 @@ describe("agentic.SessionManager sub-agent footer", function()
 
         assert.equal({}, (footer()))
     end)
+
+    -- Subagent sessions, ACP RFD: https://agentclientprotocol.com/rfds/subagents
+    describe("with subagent sessions", function()
+        local CHILD_HEADER =
+            " SubAgent(Run sleep and cat notes) · sub-agent: 1 tool call, last: execute(sleep 20; cat notes.txt) "
+
+        --- @param replaying boolean
+        --- @return agentic.acp.ClientHandlers handlers
+        local function handlers_for(replaying)
+            return session:_build_handlers(function()
+                return replaying
+            end)
+        end
+
+        --- @param handlers agentic.acp.ClientHandlers
+        --- @param state agentic.acp.SubagentWorkState|nil
+        local function associate(handlers, state)
+            handlers.on_subagent_update({
+                child_session_id = "c1",
+                parent_session_id = "test-session",
+                title = "Run sleep and cat notes",
+                description = "general-purpose",
+                state = state,
+            })
+        end
+
+        --- @param handlers agentic.acp.ClientHandlers
+        local function child_runs_bash(handlers)
+            local block = to_block(
+                bash_call("toolu_launch", "toolu_c1", "sleep 20; cat notes.txt")
+            )
+            block.parent_tool_call_id = nil
+            block.subagent_session_id = "c1"
+            handlers.on_tool_call(block)
+        end
+
+        it("pins a running sub-agent after its parent's turn ends", function()
+            local handlers = handlers_for(false)
+            assert.is_false(session.is_generating)
+
+            associate(handlers, { kind = "running" })
+            child_runs_bash(handlers)
+
+            local texts, row = footer()
+            assert.equal({ CHILD_HEADER }, texts)
+            local chat = session.widget.buf_nrs.chat
+            assert.equal(vim.api.nvim_buf_line_count(chat) - 1, row)
+        end)
+
+        it(
+            "unpins a sub-agent that goes idle, keeping it in the chat",
+            function()
+                local handlers = handlers_for(false)
+                associate(handlers, { kind = "running" })
+                child_runs_bash(handlers)
+
+                associate(handlers, { kind = "idle", stop_reason = "end_turn" })
+
+                assert.equal({}, (footer()))
+                local lines = vim.api.nvim_buf_get_lines(
+                    session.widget.buf_nrs.chat,
+                    0,
+                    -1,
+                    false
+                )
+                assert.is_true(vim.tbl_contains(lines, CHILD_HEADER))
+            end
+        )
+
+        it("pins a sub-agent that waits on the user", function()
+            local handlers = handlers_for(false)
+            associate(handlers, { kind = "running" })
+            child_runs_bash(handlers)
+
+            associate(handlers, { kind = "requires_action" })
+
+            assert.equal({ CHILD_HEADER }, (footer()))
+        end)
+
+        it("keeps the state when an update leaves it out", function()
+            local handlers = handlers_for(false)
+            associate(handlers, { kind = "running" })
+            child_runs_bash(handlers)
+
+            associate(handlers, nil)
+
+            assert.equal({ CHILD_HEADER }, (footer()))
+        end)
+
+        it("does not pin a sub-agent whose work is unknown", function()
+            local handlers = handlers_for(false)
+            associate(handlers, { kind = "running" })
+            child_runs_bash(handlers)
+
+            associate(handlers, { kind = "unknown" })
+
+            assert.equal({}, (footer()))
+        end)
+
+        it("does not pin a running state replayed from history", function()
+            local replayed = handlers_for(true)
+            associate(replayed, { kind = "running" })
+            child_runs_bash(replayed)
+            local after_replay = footer()
+
+            associate(handlers_for(false), { kind = "running" })
+
+            assert.equal({}, after_replay)
+            assert.equal({ CHILD_HEADER }, (footer()))
+        end)
+    end)
 end)

@@ -10,6 +10,7 @@ local Logger = require("agentic.utils.logger")
 local SlashCommands = require("agentic.acp.slash_commands")
 local SessionState = require("agentic.acp.session_state")
 local SubagentActivity = require("agentic.ui.subagent_activity")
+local SubagentRoster = require("agentic.ui.subagent_roster")
 local EnvironmentInfo = require("agentic.utils.environment_info")
 local Hooks = require("agentic.utils.hooks")
 
@@ -33,6 +34,7 @@ local Hooks = require("agentic.utils.hooks")
 --- @field todo_list agentic.ui.TodoList
 --- @field chat_history agentic.ui.ChatHistory
 --- @field subagent_activity agentic.ui.SubagentActivity
+--- @field subagent_roster agentic.ui.SubagentRoster
 --- @field history_to_send agentic.ui.ChatHistory.Message[]|nil
 --- @field _connection_error boolean
 --- @field _destroyed boolean Async callbacks must re-check this at RUN time, not capture it
@@ -114,6 +116,7 @@ function SessionManager:new(agent, provider_name, on_new_session)
 
     self.chat_history = ChatHistory:new()
     self.subagent_activity = SubagentActivity:new()
+    self.subagent_roster = SubagentRoster:new()
 
     self.widget = ChatWidget:new(function(input_text)
         return self:_handle_input_submit(input_text)
@@ -429,10 +432,11 @@ function SessionManager:_on_tool_call(tool_call, replaying)
         return
     end
 
-    local parent_id = tool_call.parent_tool_call_id
+    local owner_id = tool_call.subagent_session_id
+        or tool_call.parent_tool_call_id
     if
-        parent_id
-        and self:_summarise_subagent_tool_call(parent_id, tool_call, replaying)
+        owner_id
+        and self:_summarise_subagent_tool_call(owner_id, tool_call, replaying)
     then
         return
     end
@@ -501,11 +505,12 @@ end
 --- @param tool_call_update agentic.ui.MessageWriter.ToolCallBlock
 --- @param replaying boolean|nil
 function SessionManager:_on_tool_call_update(tool_call_update, replaying)
-    local parent_id = tool_call_update.parent_tool_call_id
+    local owner_id = tool_call_update.subagent_session_id
+        or tool_call_update.parent_tool_call_id
     if
-        parent_id
+        owner_id
         and self:_summarise_subagent_tool_call(
-            parent_id,
+            owner_id,
             tool_call_update,
             replaying
         )
@@ -579,11 +584,38 @@ end
 --- The Agent call headers scroll away as output arrives, so the running ones are pinned to the chat's end.
 --- Regression: session_manager.test.lua::"pins each running sub-agent to the end of the chat"
 function SessionManager:_refresh_subagent_footer()
+    -- A child session reports its own work state, which outlives the parent's turn.
+    local ids = self.subagent_roster:working_ids()
     -- Sub-agents run inside a turn, so its end clears any whose Agent call never reported finishing.
-    local footer = self.is_generating
-            and self.message_writer:list_running_subagent_headers()
-        or {}
-    self.status_animation:set_footer(footer)
+    if self.is_generating then
+        vim.list_extend(ids, self.message_writer:list_running_launch_ids())
+    end
+    self.status_animation:set_footer(self.message_writer:list_headers(ids))
+end
+
+--- Each announced child session is a block in the chat, its header carrying its work so far.
+--- Regression: session_manager.test.lua::"pins a running sub-agent after its parent's turn ends"
+--- @param association agentic.acp.SubagentAssociation
+--- @param replaying boolean
+function SessionManager:_on_subagent_update(association, replaying)
+    local child = self.subagent_roster:apply(association, replaying)
+
+    --- @type agentic.ui.MessageWriter.ToolCallBlock
+    local block = {
+        tool_call_id = association.child_session_id,
+        kind = "SubAgent",
+        argument = child.title or "sub-agent",
+        body = child.description and { child.description } or nil,
+        status = SubagentRoster.display_status(child),
+    }
+
+    if self.message_writer.tool_call_blocks[block.tool_call_id] then
+        self.message_writer:update_tool_call_block(block)
+    else
+        self.message_writer:write_tool_call_block(block)
+    end
+
+    self:_refresh_subagent_footer()
 end
 
 --- @param tracker agentic.ui.MessageWriter.ToolCallBlock A completed tool call
@@ -865,6 +897,14 @@ function SessionManager:_build_handlers(is_replaying)
             end
 
             self:_on_tool_call_update(tool_call_update, is_replaying())
+        end,
+
+        on_subagent_update = function(association)
+            if self._destroyed then
+                return
+            end
+
+            self:_on_subagent_update(association, is_replaying())
         end,
 
         on_request_permission = function(request, callback)

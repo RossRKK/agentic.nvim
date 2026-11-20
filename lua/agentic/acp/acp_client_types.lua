@@ -17,6 +17,28 @@
 --- @field fs agentic.acp.FileSystemCapability
 --- @field terminal boolean
 --- @field session? agentic.acp.ClientSessionCapabilities
+--- @field subagents? table Empty object: the client takes subagent sessions
+
+--- @alias agentic.acp.SubagentWorkStateKind
+--- | "running"
+--- | "requires_action"
+--- | "idle"
+--- | "unknown"
+--- | "unrecognized"
+
+--- A child session's current work, from `subagent_update.state`.
+--- @class agentic.acp.SubagentWorkState
+--- @field kind agentic.acp.SubagentWorkStateKind
+--- @field stop_reason? string Only on `idle`
+--- @field name? string The wire value of an `unrecognized` state
+
+--- One `subagent_update`: absent fields leave the association unchanged.
+--- @class agentic.acp.SubagentAssociation
+--- @field child_session_id string
+--- @field parent_session_id string
+--- @field title? string
+--- @field description? string
+--- @field state? agentic.acp.SubagentWorkState
 
 --- @class agentic.acp.InitializeParams
 --- @field protocolVersion number
@@ -379,6 +401,7 @@
 --- @field on_error agentic.acp.ClientHandlers.on_error
 --- @field on_tool_call fun(tool_call: agentic.ui.MessageWriter.ToolCallBlock): nil
 --- @field on_tool_call_update fun(tool_call: agentic.ui.MessageWriter.ToolCallBlock): nil
+--- @field on_subagent_update fun(association: agentic.acp.SubagentAssociation): nil Every association in the session's tree, nested ones included
 
 --- @class agentic.acp.ACPProviderConfig
 --- @field name? string Provider name
