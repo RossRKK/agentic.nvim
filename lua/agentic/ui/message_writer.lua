@@ -40,6 +40,12 @@ local TITLE_FENCE = "`````"
 --- @field is_focused boolean Whether the block is the currently focused permission target
 --- @field focused_button_index? integer 1-indexed; which button inside the focused block is highlighted (h / l selection). Nil = no button focus (block not focused).
 
+--- What the sub-agent an Agent tool call launched has done so far.
+--- @class agentic.ui.MessageWriter.SubagentSummary
+--- @field tool_call_count integer
+--- @field latest_kind? agentic.acp.ToolKind
+--- @field latest_argument? string
+
 --- @class agentic.ui.MessageWriter.ToolCallBlock
 --- @field tool_call_id string
 --- @field parent_tool_call_id? string Agent tool call of the sub-agent that made this call
@@ -53,6 +59,7 @@ local TITLE_FENCE = "`````"
 --- @field has_fold? boolean
 --- @field permission? agentic.ui.MessageWriter.PermissionState
 --- @field rendered_button_count? integer Rendered button-row count; lags `permission` state until the next `repaint_status_row`.
+--- @field subagent_summary? agentic.ui.MessageWriter.SubagentSummary
 
 --- @class agentic.ui.MessageWriter
 --- @field bufnr integer
@@ -689,8 +696,34 @@ end
 function MessageWriter:_build_header_line(tool_call_block)
     local kind = tool_call_block.kind or "other"
     local argument = self:_build_header_argument(tool_call_block)
+    local header = string.format(" %s(%s) ", kind, argument)
 
-    return string.format(" %s(%s) ", kind, argument)
+    local summary = tool_call_block.subagent_summary
+    if summary then
+        header = header .. self:_build_subagent_summary(summary) .. " "
+    end
+
+    return header
+end
+
+--- @param summary agentic.ui.MessageWriter.SubagentSummary
+--- @return string text
+function MessageWriter:_build_subagent_summary(summary)
+    local noun = summary.tool_call_count == 1 and "tool call" or "tool calls"
+    local argument = (summary.latest_argument or ""):gsub("\n", "\\n")
+
+    local max_length = self:_get_title_max_length()
+    if max_length > 0 and vim.fn.strchars(argument) > max_length then
+        argument = vim.fn.strcharpart(argument, 0, max_length) .. "..."
+    end
+
+    return string.format(
+        "· sub-agent: %d %s, last: %s(%s)",
+        summary.tool_call_count,
+        noun,
+        summary.latest_kind or "other",
+        argument
+    )
 end
 
 --- @param tool_call_block agentic.ui.MessageWriter.ToolCallBlock

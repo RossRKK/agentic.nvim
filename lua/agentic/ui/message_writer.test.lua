@@ -1584,6 +1584,98 @@ describe("agentic.ui.MessageWriter", function()
         end)
     end)
 
+    describe("sub-agent summary", function()
+        before_each(function()
+            Config.tool_calls = {
+                title = { max_length = 20, truncate_title_kinds = {} },
+            }
+        end)
+
+        --- @param summary agentic.ui.MessageWriter.SubagentSummary|nil
+        --- @return agentic.ui.MessageWriter.ToolCallBlock block
+        local function make_agent_block(summary)
+            return {
+                tool_call_id = "toolu_agent",
+                status = "in_progress",
+                kind = "think",
+                argument = "Explore the repo",
+                body = { "Find the session manager" },
+                subagent_summary = summary,
+            }
+        end
+
+        it("appends the summary to the header", function()
+            writer:write_tool_call_block(make_agent_block({
+                tool_call_count = 12,
+                latest_kind = "execute",
+                latest_argument = "git status",
+            }))
+
+            assert.is_not_nil(
+                find_row(
+                    " think(Explore the repo) · sub-agent: 12 tool calls, last: execute(git status) "
+                )
+            )
+        end)
+
+        it("rewrites only the header when the summary changes", function()
+            writer:write_tool_call_block(make_agent_block({
+                tool_call_count = 1,
+                latest_kind = "read",
+                latest_argument = "Read init.lua",
+            }))
+            local line_count = #get_all_lines()
+
+            writer:update_tool_call_block({
+                tool_call_id = "toolu_agent",
+                subagent_summary = {
+                    tool_call_count = 2,
+                    latest_kind = "execute",
+                    latest_argument = "git status",
+                },
+            })
+
+            assert.equal(line_count, #get_all_lines())
+            assert.is_not_nil(
+                find_row(
+                    " think(Explore the repo) · sub-agent: 2 tool calls, last: execute(git status) "
+                )
+            )
+            assert.is_false(content_has("Read init.lua"))
+            assert.is_not_nil(find_row("Find the session manager"))
+        end)
+
+        it("names a single tool call in the singular", function()
+            writer:write_tool_call_block(make_agent_block({
+                tool_call_count = 1,
+                latest_kind = "read",
+                latest_argument = "Read init.lua",
+            }))
+
+            assert.is_true(
+                content_has("sub%-agent: 1 tool call, last: read%(Read init.lua%)")
+            )
+        end)
+
+        it("keeps a long multi-line latest call on one header row", function()
+            writer:write_tool_call_block(make_agent_block({
+                tool_call_count = 3,
+                latest_kind = "execute",
+                latest_argument = "for f in *.lua\ndo echo $f; done",
+            }))
+
+            assert.is_true(
+                content_has("last: execute%(for f in %*%.lua\\ndo e%.%.%.%) $")
+            )
+        end)
+
+        it("leaves a block without a summary unchanged", function()
+            writer:write_tool_call_block(make_agent_block(nil))
+
+            assert.is_not_nil(find_row(" think(Explore the repo) "))
+        end)
+    end)
+
     describe("sender header tracking", function()
         --- @type TestStub
         local schedule_stub
