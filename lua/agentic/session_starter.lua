@@ -128,7 +128,7 @@ function SessionStartAttempt:start(spec, handlers, callback)
             self._replaying = true
             self._agent:load_session(
                 spec.session_id,
-                vim.fn.getcwd(),
+                spec.cwd,
                 {},
                 handlers,
                 function(response, err)

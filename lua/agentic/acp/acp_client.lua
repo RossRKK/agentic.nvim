@@ -49,6 +49,16 @@ local function try_session_cwd(callback, current_cwd)
     return nil
 end
 
+--- The per-call callback's CWD, else the configured `session_cwd`, else Neovim's.
+--- @param cwd_callback agentic.UserConfig.SessionCwdFn|nil
+--- @return string cwd
+local function resolve_session_cwd(cwd_callback)
+    local current_cwd = vim.fn.getcwd()
+    return try_session_cwd(cwd_callback, current_cwd)
+        or try_session_cwd(Config.acp_configs.session_cwd, current_cwd)
+        or current_cwd
+end
+
 --- Split from the class so LuaLS validates instance fields without the prototype methods.
 --- @class agentic.acp.ACPClientData
 --- @field provider_config agentic.acp.ACPProviderConfig
@@ -839,13 +849,8 @@ end
 --- @param callback fun(result: agentic.acp.SessionCreationResponse|nil, err: agentic.acp.ACPError|nil)
 --- @param cwd_callback agentic.UserConfig.SessionCwdFn|nil
 function ACPClient:create_session(handlers, callback, cwd_callback)
-    local current_cwd = vim.fn.getcwd()
-    local cwd = try_session_cwd(cwd_callback, current_cwd)
-        or try_session_cwd(Config.acp_configs.session_cwd, current_cwd)
-        or current_cwd
-
     self:_send_request("session/new", {
-        cwd = cwd,
+        cwd = resolve_session_cwd(cwd_callback),
         mcpServers = {},
     }, function(result, err)
         if err then
@@ -880,13 +885,13 @@ function ACPClient:create_session(handlers, callback, cwd_callback)
 end
 
 --- @param session_id string
---- @param cwd string
+--- @param cwd_callback agentic.UserConfig.SessionCwdFn|nil
 --- @param mcp_servers table[]|nil
 --- @param handlers agentic.acp.ClientHandlers
 --- @param on_load_complete fun(result: agentic.acp.LoadSessionResponse|nil, err: agentic.acp.ACPError|nil)|nil
 function ACPClient:load_session(
     session_id,
-    cwd,
+    cwd_callback,
     mcp_servers,
     handlers,
     on_load_complete
@@ -911,7 +916,7 @@ function ACPClient:load_session(
 
     self:_send_request("session/load", {
         sessionId = session_id,
-        cwd = cwd,
+        cwd = resolve_session_cwd(cwd_callback),
         mcpServers = mcp_servers or {},
     }, function(result, err)
         if not result and not err then

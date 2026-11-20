@@ -336,6 +336,47 @@ describe("ACPClient", function()
         )
     end)
 
+    describe("load_session cwd", function()
+        local cases = {
+            { name = "uses the current CWD without callbacks" },
+            {
+                name = "prefers the per-call CWD",
+                per_call = "/per-call",
+                global = "/global",
+                expected = "/per-call",
+            },
+            {
+                name = "uses the global CWD without a per-call callback",
+                global = "/global",
+                expected = "/global",
+            },
+        }
+
+        for _, case in ipairs(cases) do
+            it(case.name, function()
+                local client = create_ready_client(LOAD_CAPS)
+                local sent = capture_sent()
+                if case.global then
+                    Config.acp_configs.session_cwd = function()
+                        return case.global
+                    end
+                end
+                local per_call = case.per_call
+                    and function()
+                        return case.per_call
+                    end
+
+                client:load_session("sid-1", per_call, {}, NOOP_HANDLERS)
+
+                assert.equal("session/load", sent[1].method)
+                assert.equal(
+                    case.expected or vim.fn.getcwd(),
+                    sent[1].params.cwd
+                )
+            end)
+        end
+    end)
+
     describe("initialize", function()
         it("advertises boolean session config options as an object", function()
             assert.equal("[]", vim.json.encode({}))
@@ -585,7 +626,7 @@ describe("ACPClient", function()
 
             client:load_session(
                 "sid-1",
-                "/tmp",
+                nil,
                 {},
                 NOOP_HANDLERS,
                 function(result, err)
@@ -613,7 +654,7 @@ describe("ACPClient", function()
 
             client:load_session(
                 "sid-1",
-                "/tmp",
+                nil,
                 {},
                 NOOP_HANDLERS,
                 function(result)
@@ -637,7 +678,7 @@ describe("ACPClient", function()
 
             client:load_session(
                 "sid-1",
-                "/tmp",
+                nil,
                 {},
                 NOOP_HANDLERS,
                 function(result, err)
@@ -658,7 +699,7 @@ describe("ACPClient", function()
 
             client:load_session(
                 "sid-1",
-                "/tmp",
+                nil,
                 {},
                 NOOP_HANDLERS,
                 function(result, err)
@@ -693,8 +734,8 @@ describe("ACPClient", function()
                 --- @type agentic.acp.ClientHandlers
                 local replacement_handlers = vim.deepcopy(NOOP_HANDLERS)
 
-                client:load_session("sid-1", "/tmp", {}, first_handlers)
-                client:load_session("sid-1", "/tmp", {}, replacement_handlers)
+                client:load_session("sid-1", nil, {}, first_handlers)
+                client:load_session("sid-1", nil, {}, replacement_handlers)
 
                 local on_message = captured_on_message
                 assert.is_not_nil(on_message)
@@ -723,8 +764,8 @@ describe("ACPClient", function()
                 local first_handlers = vim.deepcopy(NOOP_HANDLERS)
                 local replacement_handlers = vim.deepcopy(NOOP_HANDLERS)
 
-                client:load_session("sid-1", "/tmp", {}, first_handlers)
-                client:load_session("sid-1", "/tmp", {}, replacement_handlers)
+                client:load_session("sid-1", nil, {}, first_handlers)
+                client:load_session("sid-1", nil, {}, replacement_handlers)
 
                 --- @diagnostic disable-next-line: need-check-nil
                 captured_on_message({
@@ -751,7 +792,7 @@ describe("ACPClient", function()
 
                 client:load_session(
                     "sid-1",
-                    "/tmp",
+                    nil,
                     {},
                     NOOP_HANDLERS,
                     function(value, err)
@@ -773,7 +814,7 @@ describe("ACPClient", function()
             stub_send_response(client, "session/load", {}, nil)
 
             assert.has_no_errors(function()
-                client:load_session("sid-1", "/tmp", {}, NOOP_HANDLERS)
+                client:load_session("sid-1", nil, {}, NOOP_HANDLERS)
             end)
         end)
     end)

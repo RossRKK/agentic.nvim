@@ -239,7 +239,7 @@
 
 --- @alias agentic.SessionStartSpec
 --- | { kind: "new", cwd?: agentic.UserConfig.SessionCwdFn }
---- | { kind: "load", session_id: string, title?: string, timestamp?: string|integer }
+--- | { kind: "load", session_id: string, title?: string, timestamp?: string|integer, cwd?: agentic.UserConfig.SessionCwdFn }
 
 --- @class agentic.SessionStartNewResult
 --- @field kind "new"

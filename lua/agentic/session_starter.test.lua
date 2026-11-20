@@ -54,13 +54,14 @@ describe("SessionStarter", function()
 
         function agent:load_session(
             session_id,
-            _cwd,
+            cwd,
             _servers,
             _handlers,
             callback
         )
             self.load_calls = self.load_calls + 1
             self.load_session_id = session_id
+            self.load_cwd = cwd
             self.load_callback = callback
         end
 
@@ -139,6 +140,23 @@ describe("SessionStarter", function()
             assert.equal(case.expected_id, result.session_id)
         end)
     end
+
+    it("loads in the CWD the spec gives", function()
+        local agent = new_agent()
+        local cwd = function()
+            return "/where-it-ran"
+        end
+
+        SessionStarter.start(
+            agent,
+            { kind = "load", session_id = "load-id", cwd = cwd },
+            prepare(NOOP_HANDLERS),
+            function() end
+        )
+        agent.ready_callback(agent)
+
+        assert.equal(cwd, agent.load_cwd)
+    end)
 
     for _, case in ipairs({
         { kind = "new", session_id = "queued-new" },
