@@ -3640,6 +3640,8 @@ describe("agentic.SessionManager sub-agent footer", function()
     local session
     --- @type fun(response: table|nil, err: table|nil)|nil
     local finish_turn
+    --- @type string[] Session ids the fake agent was sent `session/cancel` for
+    local cancelled
 
     before_each(function()
         local AgentInstance = require("agentic.acp.agent_instance")
@@ -3648,6 +3650,7 @@ describe("agentic.SessionManager sub-agent footer", function()
         original_activity = Config.tool_calls.subagent_activity
         Config.tool_calls.subagent_activity = "summary"
         finish_turn = nil
+        cancelled = {}
         schedule_stub = spy.stub(vim, "schedule")
         schedule_stub:invokes(function(fn)
             fn()
@@ -3665,6 +3668,9 @@ describe("agentic.SessionManager sub-agent footer", function()
             function fake:cancel_session() end
             function fake:send_prompt(_session_id, _prompt, callback)
                 finish_turn = callback
+            end
+            function fake:stop_generation(session_id)
+                cancelled[#cancelled + 1] = session_id
             end
             return fake
         end)
@@ -3844,12 +3850,14 @@ describe("agentic.SessionManager sub-agent footer", function()
 
         --- @param handlers agentic.acp.ClientHandlers
         --- @param state agentic.acp.SubagentWorkState|nil
-        local function associate(handlers, state)
+        --- @param capabilities agentic.acp.SubagentCapabilities|nil
+        local function associate(handlers, state, capabilities)
             handlers.on_subagent_update({
                 child_session_id = "c1",
                 parent_session_id = "test-session",
                 title = "Run sleep and cat notes",
                 description = "general-purpose",
+                capabilities = capabilities,
                 state = state,
             })
         end
@@ -3937,6 +3945,97 @@ describe("agentic.SessionManager sub-agent footer", function()
 
             assert.equal({}, after_replay)
             assert.equal({ CHILD_HEADER }, (footer()))
+        end)
+
+        describe("stop_subagents", function()
+            local CANCEL = { cancel = true }
+
+            --- Each case announces c1 with `first`, then sends the `later` updates.
+            --- @type { name: string, replaying?: boolean, first: table, later?: table[], cancelled: string[] }[]
+            local CASES = {
+                {
+                    name = "cancels a running child that grants cancel",
+                    first = { { kind = "running" }, CANCEL },
+                    cancelled = { "c1" },
+                },
+                {
+                    name = "cancels a child waiting on the user",
+                    first = { { kind = "running" }, CANCEL },
+                    later = { { { kind = "requires_action" } } },
+                    cancelled = { "c1" },
+                },
+                {
+                    name = "leaves an idle child alone",
+                    first = { { kind = "running" }, CANCEL },
+                    later = { { { kind = "idle", stop_reason = "end_turn" } } },
+                    cancelled = {},
+                },
+                {
+                    name = "leaves a child whose work is unknown alone",
+                    first = { { kind = "running" }, CANCEL },
+                    later = { { { kind = "unknown" } } },
+                    cancelled = {},
+                },
+                {
+                    name = "never cancels a child that withholds cancel",
+                    first = { { kind = "running" }, { cancel = false } },
+                    cancelled = {},
+                },
+                {
+                    name = "keeps the grant when a later update leaves it out",
+                    first = {
+                        { kind = "idle", stop_reason = "end_turn" },
+                        CANCEL,
+                    },
+                    later = { { { kind = "running" } } },
+                    cancelled = { "c1" },
+                },
+                {
+                    name = "drops the grant when a later set withholds it",
+                    first = { { kind = "running" }, CANCEL },
+                    later = { { { kind = "running" }, { cancel = false } } },
+                    cancelled = {},
+                },
+                {
+                    name = "leaves a running state replayed from history alone",
+                    replaying = true,
+                    first = { { kind = "running" }, CANCEL },
+                    cancelled = {},
+                },
+            }
+
+            for _, case in ipairs(CASES) do
+                it(case.name, function()
+                    local handlers = handlers_for(case.replaying == true)
+                    associate(handlers, case.first[1], case.first[2])
+                    for _, update in ipairs(case.later or {}) do
+                        associate(handlers, update[1], update[2])
+                    end
+
+                    session:stop_subagents()
+
+                    assert.equal(case.cancelled, cancelled)
+                end)
+            end
+
+            it("answers the stopped child's prompts and no other", function()
+                local handlers = handlers_for(false)
+                associate(handlers, { kind = "requires_action" }, CANCEL)
+                local answers = {}
+                for _, session_id in ipairs({ "test-session", "c1" }) do
+                    session.permission_manager:add_request({
+                        sessionId = session_id,
+                        toolCall = { toolCallId = "tc-" .. session_id },
+                        options = {},
+                    }, function(option_id)
+                        answers[session_id] = option_id or "cancelled"
+                    end)
+                end
+
+                session:stop_subagents()
+
+                assert.equal({ c1 = "cancelled" }, answers)
+            end)
         end)
     end)
 end)

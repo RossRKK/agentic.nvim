@@ -618,6 +618,16 @@ function SessionManager:_on_subagent_update(association, replaying)
     self:_refresh_subagent_footer()
 end
 
+--- Stops the current work of each sub-agent session working now, leaving the parent's.
+--- Regression: session_manager.test.lua::"stop_subagents"
+function SessionManager:stop_subagents()
+    -- A child confirms the stop with its own idle state, so the roster is left to report it.
+    for _, child_session_id in ipairs(self.subagent_roster:stoppable_ids()) do
+        self.agent:stop_generation(child_session_id)
+        self.permission_manager:cancel_session(child_session_id)
+    end
+end
+
 --- @param tracker agentic.ui.MessageWriter.ToolCallBlock A completed tool call
 --- @param replaying boolean|nil
 function SessionManager:_reload_edited_file(tracker, replaying)

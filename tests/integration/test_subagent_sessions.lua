@@ -157,4 +157,45 @@ describe("Subagent sessions", function()
         assert.equal(1, #resumed)
         assert.equal({}, footer())
     end)
+
+    --- @return string[] session ids sent `session/cancel`, in order
+    local function cancelled()
+        return child.lua_get([[
+            vim.iter(_G.sent)
+                :filter(function(m) return m.method == "session/cancel" end)
+                :map(function(m) return m.params.sessionId end)
+                :totable()
+        ]])
+    end
+
+    it("stops the reply alone, then the sub-agent it left running", function()
+        local CHILD = "a4b24fca769b9e1e6"
+        local PARENT = child.lua_get(
+            [[require("tests.fixtures.subagent_sessions").parent_session_id]]
+        )
+        replay(1, frame_index('"state":"idle"', 0) - 1)
+
+        child.lua([[
+                local key = _G.session.session_key
+                _G.session.is_generating = true
+                require("agentic").stop_generation({ session = key })
+            ]])
+        local after_reply_stop = cancelled()
+        child.lua([[
+                require("agentic").stop_subagents({ session = _G.session.session_key })
+            ]])
+
+        assert.equal({ PARENT }, after_reply_stop)
+        assert.equal({ PARENT, CHILD }, cancelled())
+    end)
+
+    it("stops nothing once the sub-agent is idle", function()
+        replay(1, frame_index('"state":"idle"', 0))
+
+        child.lua([[
+            require("agentic").stop_subagents({ session = _G.session.session_key })
+        ]])
+
+        assert.equal({}, cancelled())
+    end)
 end)

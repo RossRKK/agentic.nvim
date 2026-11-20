@@ -693,6 +693,7 @@ providers show their activity as before.
 | `:lua require("agentic").prev_session()`                     | Open the previous session, wrapping at the start                  |
 | `:lua require("agentic").new_session_with_provider()`        | Pick a provider, then start a new session with it                 |
 | `:lua require("agentic").stop_generation(opts)`              | Stop current generation or tool execution (session stays active)  |
+| `:lua require("agentic").stop_subagents(opts)`               | Stop the session's running sub-agents, leaving its reply going    |
 | `:lua require("agentic").restore_session()`                  | Show provider's session picker to restore a previous session      |
 | `:lua require("agentic").restore_session_by_id(session_id)`  | Restore a session by its ID                                       |
 | `:lua require("agentic").switch_provider()`                  | Switch ACP provider mid-session (shows picker, preserves history) |

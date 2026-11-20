@@ -618,6 +618,8 @@ agentic.switch_provider({opts})
 agentic.stop_generation({opts})
   Stop the agent's current generation or tool execution. The
   session remains active and ready for the next prompt.
+  Sub-agents running in the background keep going; see
+  |agentic.stop_subagents()|.
 
   Parameters: ~
     {opts}  (table|nil)  Optional fields:
@@ -625,6 +627,18 @@ agentic.stop_generation({opts})
                             session visible in this tab, else the
                             most recently opened one. An unknown key
                             stops nothing.
+
+                                             *agentic.stop_subagents()*
+agentic.stop_subagents({opts})
+  Stop the current work of the session's running sub-agents, each
+  through `session/cancel` on its own ACP sub-agent session. The
+  session's own reply keeps going. Only a sub-agent the agent reports
+  running or waiting on the user, and allows the client to cancel, is
+  stopped; its pending permission prompts are answered as cancelled.
+  A stopped sub-agent shows as failed once the agent confirms it.
+
+  Parameters: ~
+    {opts}  (table|nil)  Same fields as |agentic.stop_generation()|.
 
                                              *agentic.restore_session()*
 agentic.restore_session()

@@ -247,6 +247,16 @@ function Agentic.stop_generation(opts)
     session.status_animation:stop()
 end
 
+--- Stops the current work of the session's running sub-agents, leaving its own reply going
+--- @param opts agentic.StopOpts|nil
+function Agentic.stop_subagents(opts)
+    local session = Agentic._stop_target(opts)
+
+    if session then
+        session:stop_subagents()
+    end
+end
+
 --- An explicit key names exactly one session, unknown or not; without one, the resolved session.
 --- @param opts agentic.StopOpts|nil
 --- @return agentic.SessionManager|nil

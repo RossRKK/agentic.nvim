@@ -16,6 +16,7 @@ SubagentRoster.__index = SubagentRoster
 --- @field title? string
 --- @field description? string
 --- @field state? agentic.ui.SubagentRoster.State
+--- @field cancellable boolean The child granted `cancel`, so `session/cancel` may name it
 
 --- @return agentic.ui.SubagentRoster
 function SubagentRoster:new()
@@ -26,10 +27,14 @@ end
 --- @param replaying boolean
 --- @return agentic.ui.SubagentRoster.Child child
 function SubagentRoster:apply(association, replaying)
-    local child = self._children[association.child_session_id] or {}
+    local child = self._children[association.child_session_id]
+        or { cancellable = false }
 
     child.title = association.title or child.title
     child.description = association.description or child.description
+    if association.capabilities then
+        child.cancellable = association.capabilities.cancel
+    end
     if association.state then
         child.state = {
             work = association.state,
@@ -59,6 +64,13 @@ function SubagentRoster:working_ids()
         end
     end
     return ids
+end
+
+--- @return string[] child_session_ids Working children that granted `cancel`
+function SubagentRoster:stoppable_ids()
+    return vim.tbl_filter(function(id)
+        return self._children[id].cancellable
+    end, self:working_ids())
 end
 
 --- The tool-call status a child's block is drawn with.
