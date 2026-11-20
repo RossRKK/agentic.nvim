@@ -726,6 +726,37 @@ function MessageWriter:_build_subagent_summary(summary)
     )
 end
 
+--- Header of each Agent tool call whose sub-agent has not finished, in chat order.
+--- @return agentic.ui.StatusAnimation.VirtLine[] headers
+function MessageWriter:list_running_subagent_headers()
+    --- @type { row: integer, block: agentic.ui.MessageWriter.ToolCallBlock }[]
+    local running = {}
+    for tool_call_id, block in pairs(self.tool_call_blocks) do
+        local row = self:_get_block_start_row(tool_call_id)
+        if
+            row
+            and block.subagent_summary
+            and block.status ~= "completed"
+            and block.status ~= "failed"
+        then
+            running[#running + 1] = { row = row, block = block }
+        end
+    end
+
+    table.sort(running, function(a, b)
+        return a.row < b.row
+    end)
+
+    return vim.tbl_map(function(entry)
+        return {
+            {
+                self:_build_header_line(entry.block),
+                Theme.get_status_hl_group(entry.block.status),
+            },
+        }
+    end, running)
+end
+
 --- @param tool_call_block agentic.ui.MessageWriter.ToolCallBlock
 --- @return string argument
 function MessageWriter:_build_header_argument(tool_call_block)

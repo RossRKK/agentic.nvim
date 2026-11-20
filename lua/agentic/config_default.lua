@@ -239,7 +239,8 @@
 --- @field truncate_title_kinds agentic.acp.ToolKind[] Tool kinds affected by max_length.
 
 --- How the chat shows what a sub-agent does: every message and tool call as
---- its own block, or only a live summary on the tool call that launched it.
+--- its own block, or only a live summary on the tool call that launched it,
+--- also pinned to the chat's end while the sub-agent runs.
 --- @alias agentic.UserConfig.ToolCalls.SubagentActivity "full"|"summary"
 
 --- Tool call display configuration

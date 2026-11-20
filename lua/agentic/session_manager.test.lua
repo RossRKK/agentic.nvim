@@ -1184,6 +1184,7 @@ describe("agentic.SessionManager", function()
                 _start_spinner = SessionManager._start_spinner,
                 _reload_edited_file = SessionManager._reload_edited_file,
                 _reveal_subagent_tool_call = function() end,
+                _refresh_subagent_footer = function() end,
                 diff_coordinator = {
                     clear = function() end,
                     diff_state = {},
@@ -1684,6 +1685,7 @@ describe("agentic.SessionManager", function()
                     )
                 end,
                 _handle_input_submit = SessionManager._handle_input_submit,
+                _refresh_subagent_footer = function() end,
             } --[[@as agentic.SessionManager]]
 
             local result = session:_handle_input_submit("/new")
@@ -1768,6 +1770,7 @@ describe("agentic.SessionManager", function()
                     return true
                 end,
                 _handle_input_submit = SessionManager._handle_input_submit,
+                _refresh_subagent_footer = function() end,
             } --[[@as agentic.SessionManager]]
 
             session:_handle_input_submit("hello")
@@ -2339,6 +2342,7 @@ describe("agentic.SessionManager", function()
                 end,
                 destroy = SessionManager.destroy,
                 _handle_input_submit = SessionManager._handle_input_submit,
+                _refresh_subagent_footer = function() end,
             } --[[@as agentic.SessionManager]]
         end
 
@@ -3613,5 +3617,215 @@ describe("agentic.SessionManager sub-agent activity", function()
 
         assert.spy(checktime_stub).was.called(1)
         assert.is_nil(session.message_writer.tool_call_blocks["toolu_edit"])
+    end)
+end)
+
+describe("agentic.SessionManager sub-agent footer", function()
+    local ACPClient = require("agentic.acp.acp_client")
+    local Config = require("agentic.config")
+
+    local NS_ANIMATION = vim.api.nvim_create_namespace("agentic_animation")
+
+    --- @type TestStub
+    local get_instance_stub
+    --- @type TestStub
+    local schedule_stub
+    --- @type TestStub
+    local health_check_stub
+    --- @type TestStub
+    local defer_stub
+    --- @type agentic.UserConfig.ToolCalls.SubagentActivity
+    local original_activity
+    --- @type agentic.SessionManager
+    local session
+    --- @type fun(response: table|nil, err: table|nil)|nil
+    local finish_turn
+
+    before_each(function()
+        local AgentInstance = require("agentic.acp.agent_instance")
+        local ACPHealth = require("agentic.acp.acp_health")
+
+        original_activity = Config.tool_calls.subagent_activity
+        Config.tool_calls.subagent_activity = "summary"
+        finish_turn = nil
+        schedule_stub = spy.stub(vim, "schedule")
+        schedule_stub:invokes(function(fn)
+            fn()
+        end)
+        -- The spinner's frames would otherwise outlive the test.
+        defer_stub = spy.stub(vim, "defer_fn")
+        health_check_stub = spy.stub(ACPHealth, "check_configured_provider")
+        health_check_stub:returns(true)
+        get_instance_stub = spy.stub(AgentInstance, "get_instance")
+        get_instance_stub:invokes(function(provider_name)
+            --- @type agentic.acp.ACPClient
+            local fake = {}
+            fake.provider_config = { name = provider_name or "Test" }
+            fake.agent_info = {}
+            function fake:cancel_session() end
+            function fake:send_prompt(_session_id, _prompt, callback)
+                finish_turn = callback
+            end
+            return fake
+        end)
+
+        session = new_test_manager()
+        session.session_id = "test-session" --[[@as string]]
+        session._is_first_message = false
+    end)
+
+    after_each(function()
+        session:destroy()
+        Config.tool_calls.subagent_activity = original_activity
+        schedule_stub:revert()
+        defer_stub:revert()
+        health_check_stub:revert()
+        get_instance_stub:revert()
+    end)
+
+    --- @param id string
+    --- @param description string
+    local function agent_call(id, description)
+        return {
+            sessionUpdate = "tool_call",
+            toolCallId = id,
+            title = description,
+            kind = "think",
+            status = "pending",
+            rawInput = { description = description, prompt = description },
+            _meta = { claudeCode = { toolName = "Agent" } },
+        }
+    end
+
+    --- @param parent_id string
+    --- @param id string
+    --- @param command string
+    local function bash_call(parent_id, id, command)
+        return {
+            sessionUpdate = "tool_call",
+            toolCallId = id,
+            title = command,
+            kind = "execute",
+            status = "pending",
+            rawInput = { command = command },
+            _meta = {
+                claudeCode = { toolName = "Bash", parentToolUseId = parent_id },
+            },
+        }
+    end
+
+    --- @param id string
+    --- @param status agentic.acp.ToolCallStatus
+    local function finished(id, status)
+        return {
+            sessionUpdate = "tool_call_update",
+            toolCallId = id,
+            status = status,
+        }
+    end
+
+    --- @param update table
+    --- @return agentic.ui.MessageWriter.ToolCallBlock
+    local function to_block(update)
+        return ACPClient.__build_tool_call_message(ACPClient, update)
+    end
+
+    --- @param replaying boolean
+    local function start_two_subagents(replaying)
+        local handlers = session:_build_handlers(function()
+            return replaying
+        end)
+        handlers.on_tool_call(to_block(agent_call("toolu_A", "Explore")))
+        handlers.on_tool_call(to_block(agent_call("toolu_B", "Review")))
+        handlers.on_tool_call(to_block(bash_call("toolu_B", "toolu_b1", "ls")))
+        handlers.on_tool_call(to_block(bash_call("toolu_A", "toolu_a1", "pwd")))
+        handlers.on_tool_call(
+            to_block(bash_call("toolu_A", "toolu_a2", "git status"))
+        )
+        return handlers
+    end
+
+    --- Text of each footer row below the spinner, and the row it hangs off.
+    --- @return string[] footer
+    --- @return integer|nil row
+    local function footer()
+        local marks = vim.api.nvim_buf_get_extmarks(
+            session.widget.buf_nrs.chat,
+            NS_ANIMATION,
+            0,
+            -1,
+            { details = true }
+        )
+        local texts = {}
+        local mark = marks[1]
+        for _, line in ipairs(mark and mark[4].virt_lines or {}) do
+            local text = line[#line][1]
+            if text:find("sub-agent:", 1, true) then
+                texts[#texts + 1] = text
+            end
+        end
+        return texts, mark and mark[2]
+    end
+
+    local EXPLORE_HEADER =
+        " think(Explore) · sub-agent: 2 tool calls, last: execute(git status) "
+    local REVIEW_HEADER =
+        " think(Review) · sub-agent: 1 tool call, last: execute(ls) "
+
+    it("pins each running sub-agent to the end of the chat", function()
+        session.is_generating = true
+
+        start_two_subagents(false)
+
+        local texts, row = footer()
+        assert.equal({ EXPLORE_HEADER, REVIEW_HEADER }, texts)
+        local chat = session.widget.buf_nrs.chat
+        assert.equal(vim.api.nvim_buf_line_count(chat) - 1, row)
+    end)
+
+    it("drops a sub-agent once its Agent call completes or fails", function()
+        session.is_generating = true
+        local handlers = start_two_subagents(false)
+
+        handlers.on_tool_call_update(to_block(finished("toolu_A", "completed")))
+        local after_complete = footer()
+        handlers.on_tool_call_update(to_block(finished("toolu_B", "failed")))
+
+        assert.equal({ REVIEW_HEADER }, after_complete)
+        assert.equal({}, (footer()))
+        local lines = vim.api.nvim_buf_get_lines(
+            session.widget.buf_nrs.chat,
+            0,
+            -1,
+            false
+        )
+        assert.is_true(vim.tbl_contains(lines, EXPLORE_HEADER))
+    end)
+
+    it("clears the footer when the turn ends", function()
+        assert.is_true(session:_handle_input_submit("Explore and review"))
+        start_two_subagents(false)
+        assert.equal(2, #footer())
+        assert.is_not_nil(finish_turn)
+        ---@cast finish_turn fun(response: table|nil, err: table|nil)
+
+        finish_turn({ stopReason = "cancelled" }, nil)
+
+        assert.equal({}, (footer()))
+    end)
+
+    it("pins nothing while replaying a session", function()
+        start_two_subagents(true)
+
+        assert.equal({}, (footer()))
+    end)
+
+    it("pins nothing when sub-agent activity is shown in full", function()
+        Config.tool_calls.subagent_activity = "full"
+        session.is_generating = true
+
+        start_two_subagents(false)
+
+        assert.equal({}, (footer()))
     end)
 end)

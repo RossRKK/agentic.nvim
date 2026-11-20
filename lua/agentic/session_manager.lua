@@ -572,6 +572,18 @@ function SessionManager:_on_tool_call_update(tool_call_update, replaying)
     if not self.permission_manager:has_pending() then
         self:_start_spinner("generating")
     end
+
+    self:_refresh_subagent_footer()
+end
+
+--- The Agent call headers scroll away as output arrives, so the running ones are pinned to the chat's end.
+--- Regression: session_manager.test.lua::"pins each running sub-agent to the end of the chat"
+function SessionManager:_refresh_subagent_footer()
+    -- Sub-agents run inside a turn, so its end clears any whose Agent call never reported finishing.
+    local footer = self.is_generating
+            and self.message_writer:list_running_subagent_headers()
+        or {}
+    self.status_animation:set_footer(footer)
 end
 
 --- @param tracker agentic.ui.MessageWriter.ToolCallBlock A completed tool call
@@ -787,6 +799,7 @@ function SessionManager:_handle_input_submit(input_text)
             self.message_writer:write_finish_message(response, err)
             self.status_animation:stop()
             self.is_generating = false
+            self:_refresh_subagent_footer()
 
             --- @type agentic.UserConfig.ResponseCompleteData
             local response_hook_data = {
