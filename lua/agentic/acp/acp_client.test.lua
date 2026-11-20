@@ -2470,4 +2470,235 @@ describe("ACPClient", function()
             assert.equal(nil, message.body)
         end)
     end)
+
+    -- Subagent sessions, ACP RFD: https://agentclientprotocol.com/rfds/subagents
+    describe("subagent sessions", function()
+        --- @type { name: string, args: table }[]
+        local received
+
+        --- @return agentic.acp.ClientHandlers handlers
+        local function recording_handlers()
+            --- @param name string
+            local function record(name)
+                return function(...)
+                    received[#received + 1] = { name = name, args = { ... } }
+                end
+            end
+
+            --- @type agentic.acp.ClientHandlers
+            local handlers = {
+                on_session_update = record("on_session_update"),
+                on_request_permission = record("on_request_permission"),
+                on_error = record("on_error"),
+                on_tool_call = record("on_tool_call"),
+                on_tool_call_update = record("on_tool_call_update"),
+                on_subagent_update = record("on_subagent_update"),
+            }
+            return handlers
+        end
+
+        --- @param session_id string
+        --- @param update table
+        local function deliver_update(session_id, update)
+            assert.is_not_nil(captured_on_message)
+            -- Raw wire frames, including updates the client types do not model.
+            local on_message = captured_on_message --[[@as fun(message: table)]]
+            on_message({
+                jsonrpc = "2.0",
+                method = "session/update",
+                params = { sessionId = session_id, update = update },
+            })
+        end
+
+        --- @param parent_id string
+        --- @param child_id string
+        --- @param state table|nil
+        local function announce(parent_id, child_id, state)
+            deliver_update(parent_id, {
+                sessionUpdate = "subagent_update",
+                sessionId = child_id,
+                title = "Run sleep and cat notes",
+                description = "general-purpose",
+                capabilities = { cancel = {} },
+                state = state,
+            })
+        end
+
+        --- @return agentic.acp.ACPClient client
+        --- @return fun()[] queue
+        local function client_with_parent()
+            local client = create_ready_client()
+            local queue = queue_schedules()
+            received = {}
+            client.subscribers["s1"] = recording_handlers()
+            return client, queue
+        end
+
+        it("hands the parent a parsed association", function()
+            local _, queue = client_with_parent()
+
+            announce("s1", "c1", { state = "running" })
+            drain(queue)
+
+            assert.equal({
+                {
+                    name = "on_subagent_update",
+                    args = {
+                        {
+                            child_session_id = "c1",
+                            parent_session_id = "s1",
+                            title = "Run sleep and cat notes",
+                            description = "general-purpose",
+                            state = { kind = "running" },
+                        },
+                    },
+                },
+            }, received)
+        end)
+
+        local STATES = {
+            {
+                wire = { state = "idle", stopReason = "end_turn" },
+                parsed = { kind = "idle", stop_reason = "end_turn" },
+            },
+            {
+                wire = { state = "requires_action" },
+                parsed = { kind = "requires_action" },
+            },
+            { wire = { state = "unknown" }, parsed = { kind = "unknown" } },
+            {
+                wire = { state = "_vendor_paused" },
+                parsed = { kind = "unrecognized", name = "_vendor_paused" },
+            },
+        }
+
+        for _, case in ipairs(STATES) do
+            it("parses the " .. case.wire.state .. " work state", function()
+                local _, queue = client_with_parent()
+
+                announce("s1", "c1", case.wire)
+                drain(queue)
+
+                assert.equal(case.parsed, received[1].args[1].state)
+            end)
+        end
+
+        it("leaves the state out when the update has none", function()
+            local _, queue = client_with_parent()
+
+            announce("s1", "c1", nil)
+            drain(queue)
+
+            assert.equal(nil, received[1].args[1].state)
+        end)
+
+        it(
+            "routes a child's tool call to its parent, marked as the child's",
+            function()
+                local _, queue = client_with_parent()
+
+                announce("s1", "c1", { state = "running" })
+                deliver_update("c1", {
+                    sessionUpdate = "tool_call",
+                    toolCallId = "t1",
+                    title = "sleep 20; cat notes.txt",
+                    kind = "execute",
+                    status = "pending",
+                    _meta = {
+                        claudeCode = { parentToolUseId = "toolu_launch" },
+                    },
+                })
+                drain(queue)
+
+                assert.equal("on_tool_call", received[2].name)
+                local message = received[2].args[1]
+                assert.equal("c1", message.subagent_session_id)
+                assert.equal(nil, message.parent_tool_call_id)
+                assert.equal("execute", message.kind)
+            end
+        )
+
+        it("routes a nested child's traffic to the root session", function()
+            local _, queue = client_with_parent()
+
+            announce("s1", "c1", { state = "running" })
+            announce("c1", "c2", { state = "running" })
+            deliver_update("c2", {
+                sessionUpdate = "tool_call_update",
+                toolCallId = "t2",
+                status = "completed",
+            })
+            drain(queue)
+
+            assert.equal("c1", received[2].args[1].parent_session_id)
+            assert.equal("c2", received[2].args[1].child_session_id)
+            assert.equal("on_tool_call_update", received[3].name)
+            assert.equal("c2", received[3].args[1].subagent_session_id)
+        end)
+
+        it(
+            "keeps a child under its first parent when another claims it",
+            function()
+                local client, queue = client_with_parent()
+                client.subscribers["s2"] = recording_handlers()
+
+                announce("s1", "c1", { state = "running" })
+                announce("s2", "c1", { state = "running" })
+                deliver_update("c1", {
+                    sessionUpdate = "tool_call_update",
+                    toolCallId = "t1",
+                    status = "completed",
+                })
+                drain(queue)
+
+                assert.equal(
+                    { "on_subagent_update", "on_tool_call_update" },
+                    vim.tbl_map(function(entry)
+                        return entry.name
+                    end, received)
+                )
+            end
+        )
+
+        it("asks the parent to answer a child's permission request", function()
+            local client, queue = client_with_parent()
+            local sent = capture_sent()
+
+            announce("s1", "c1", { state = "running" })
+            --- @diagnostic disable-next-line: invisible
+            client:__handle_request_permission(21, {
+                sessionId = "c1",
+                toolCall = { toolCallId = "t1", kind = "execute" },
+                options = {
+                    { optionId = "allow", name = "Allow", kind = "allow_once" },
+                },
+            })
+            drain(queue)
+
+            assert.equal(0, #sent)
+            assert.equal("on_request_permission", received[3].name)
+            assert.equal("c1", received[2].args[1].subagent_session_id)
+        end)
+
+        it("does not pass the parent a child's own conversation", function()
+            local _, queue = client_with_parent()
+
+            announce("s1", "c1", { state = "running" })
+            deliver_update("c1", {
+                sessionUpdate = "agent_message_chunk",
+                content = { type = "text", text = "working" },
+            })
+            deliver_update("s1", {
+                sessionUpdate = "session_message",
+                messageId = "m1",
+                senderSessionId = "c1",
+                recipientSessionId = "s1",
+                content = { { type = "text", text = "report" } },
+            })
+            drain(queue)
+
+            assert.equal(1, #received)
+            assert.equal("on_subagent_update", received[1].name)
+        end)
+    end)
 end)

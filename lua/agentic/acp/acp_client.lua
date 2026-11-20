@@ -1,4 +1,5 @@
 local ACPPayloads = require("agentic.acp.acp_payloads")
+local SubagentAssociation = require("agentic.acp.subagent_association")
 local Logger = require("agentic.utils.logger")
 local JsonFormat = require("agentic.utils.json_format")
 local transport_module = require("agentic.acp.acp_transport")
@@ -77,6 +78,7 @@ end
 
 --- @class agentic.acp.ACPClient : agentic.acp.ACPClientData
 --- @field _on_ready fun(client: agentic.acp.ACPClient)
+--- @field _child_parents table<string, string> Each announced child session's immediate parent
 local ACPClient = {}
 ACPClient.__index = ACPClient
 
@@ -127,6 +129,7 @@ function ACPClient:new(config, on_ready)
 
     local client = setmetatable(instance, self) --[[@as agentic.acp.ACPClient]]
     client._on_ready = on_ready
+    client._child_parents = {}
 
     client:_setup_transport()
     client:_connect()
@@ -521,7 +524,9 @@ function ACPClient:__handle_session_update(params)
 
     local session_update_type = update.sessionUpdate
 
-    if session_update_type == "tool_call" then
+    if session_update_type == "subagent_update" then
+        self:__handle_subagent_update(session_id, update)
+    elseif session_update_type == "tool_call" then
         update.kind = update.kind or "other"
         update.status = update.status or "pending"
 
@@ -540,10 +545,71 @@ function ACPClient:__handle_session_update(params)
         self:__handle_tool_call(session_id, update)
     elseif session_update_type == "tool_call_update" then
         self:__handle_tool_call_update(session_id, update)
+    elseif
+        self._child_parents[session_id]
+        or session_update_type == "session_message"
+        or session_update_type == "session_message_chunk"
+    then
+        -- Only a child's tool calls reach the parent's chat, as its summary.
+        Logger.debug(
+            "Ignoring subagent session traffic: ",
+            session_id,
+            session_update_type
+        )
     else
         self:__with_subscriber(session_id, function(subscriber)
             subscriber.on_session_update(update)
         end)
+    end
+end
+
+--- The RFD forbids reparenting, self-reference and cycles, so such an update is dropped.
+--- https://agentclientprotocol.com/rfds/subagents#announcing-and-updating-an-association
+--- @protected
+--- @param session_id string
+--- @param update table
+function ACPClient:__handle_subagent_update(session_id, update)
+    local association = SubagentAssociation.parse(session_id, update)
+    if not association then
+        Logger.debug("Ignoring subagent_update without a child: ", update)
+        return
+    end
+
+    local child_id = association.child_session_id
+    local known_parent = self._child_parents[child_id]
+    if
+        (known_parent and known_parent ~= session_id)
+        or self:_root_session(session_id) == child_id
+    then
+        Logger.debug("Ignoring subagent_update that reparents ", child_id)
+        return
+    end
+
+    self._child_parents[child_id] = session_id
+
+    self:__with_subscriber(self:_root_session(session_id), function(subscriber)
+        subscriber.on_subagent_update(association)
+    end)
+end
+
+--- The session whose subscriber shows `session_id`: itself, or the root above an announced child.
+--- @param session_id string
+--- @return string root_session_id
+function ACPClient:_root_session(session_id)
+    local root = session_id
+    while self._child_parents[root] do
+        root = self._child_parents[root]
+    end
+    return root
+end
+
+--- A child's call carries its session instead of a launching tool call, which the RFD form hides.
+--- @param session_id string
+--- @param message agentic.ui.MessageWriter.ToolCallBlock
+function ACPClient:_mark_subagent_call(session_id, message)
+    if self._child_parents[session_id] then
+        message.subagent_session_id = session_id
+        message.parent_tool_call_id = nil
     end
 end
 
@@ -677,8 +743,9 @@ end
 --- @param update agentic.acp.ToolCallMessage
 function ACPClient:__handle_tool_call(session_id, update)
     local message = self:__build_tool_call_message(update)
+    self:_mark_subagent_call(session_id, message)
 
-    self:__with_subscriber(session_id, function(subscriber)
+    self:__with_subscriber(self:_root_session(session_id), function(subscriber)
         subscriber.on_tool_call(message)
     end)
 end
@@ -688,8 +755,9 @@ end
 --- @param update agentic.acp.ToolCallUpdate
 function ACPClient:__handle_tool_call_update(session_id, update)
     local message = self:__build_tool_call_message(update)
+    self:_mark_subagent_call(session_id, message)
 
-    self:__with_subscriber(session_id, function(subscriber)
+    self:__with_subscriber(self:_root_session(session_id), function(subscriber)
         subscriber.on_tool_call_update(message)
     end)
 end
@@ -740,7 +808,7 @@ function ACPClient:__handle_request_permission(message_id, request)
 
     local session_id = request.sessionId
 
-    self:__with_subscriber(session_id, function(subscriber)
+    self:__with_subscriber(self:_root_session(session_id), function(subscriber)
         -- The type guard above only covers the payload's top level; nested
         -- shapes and both subscriber callbacks can still throw in here.
         -- `vim.schedule` swallows that throw, so the read loop survives while
@@ -748,6 +816,7 @@ function ACPClient:__handle_request_permission(message_id, request)
         -- `lua/agentic/acp/AGENTS.md`.
         local ok, err = pcall(function()
             local message = self:__build_tool_call_message(request.toolCall)
+            self:_mark_subagent_call(session_id, message)
             subscriber.on_tool_call_update(message)
 
             subscriber.on_request_permission(request, answer)
