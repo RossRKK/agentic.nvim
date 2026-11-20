@@ -1,3 +1,4 @@
+agentic-agent-name	agentic.txt	/*agentic-agent-name*
 agentic-auto-scroll	agentic.txt	/*agentic-auto-scroll*
 agentic-blink-cmp	agentic.txt	/*agentic-blink-cmp*
 agentic-chat-icons	agentic.txt	/*agentic-chat-icons*
@@ -56,6 +57,7 @@ agentic-sessions	agentic.txt	/*agentic-sessions*
 agentic-slash-commands	agentic.txt	/*agentic-slash-commands*
 agentic-spinner-chars	agentic.txt	/*agentic-spinner-chars*
 agentic-status-icons	agentic.txt	/*agentic-status-icons*
+agentic-subagent-activity-config	agentic.txt	/*agentic-subagent-activity-config*
 agentic-system-context	agentic.txt	/*agentic-system-context*
 agentic-tool-call-title-config	agentic.txt	/*agentic-tool-call-title-config*
 agentic-usage	agentic.txt	/*agentic-usage*
@@ -79,6 +81,7 @@ agentic.rotate_layout()	agentic.txt	/*agentic.rotate_layout()*
 agentic.select_session()	agentic.txt	/*agentic.select_session()*
 agentic.setup()	agentic.txt	/*agentic.setup()*
 agentic.stop_generation()	agentic.txt	/*agentic.stop_generation()*
+agentic.stop_subagents()	agentic.txt	/*agentic.stop_subagents()*
 agentic.switch_provider()	agentic.txt	/*agentic.switch_provider()*
 agentic.toggle()	agentic.txt	/*agentic.toggle()*
 agentic.txt	agentic.txt	/*agentic.txt*
