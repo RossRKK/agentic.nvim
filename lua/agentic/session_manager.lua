@@ -9,6 +9,7 @@ local FileSystem = require("agentic.utils.file_system")
 local Logger = require("agentic.utils.logger")
 local SlashCommands = require("agentic.acp.slash_commands")
 local SessionState = require("agentic.acp.session_state")
+local SubagentActivity = require("agentic.ui.subagent_activity")
 local EnvironmentInfo = require("agentic.utils.environment_info")
 local Hooks = require("agentic.utils.hooks")
 
@@ -31,6 +32,7 @@ local Hooks = require("agentic.utils.hooks")
 --- @field diff_coordinator agentic.ui.DiffCoordinator
 --- @field todo_list agentic.ui.TodoList
 --- @field chat_history agentic.ui.ChatHistory
+--- @field subagent_activity agentic.ui.SubagentActivity
 --- @field history_to_send agentic.ui.ChatHistory.Message[]|nil
 --- @field _connection_error boolean
 --- @field _destroyed boolean Async callbacks must re-check this at RUN time, not capture it
@@ -44,6 +46,22 @@ SessionManager.__index = SessionManager
 
 --- Codepoints, not display cells
 local TITLE_MAX_CHARS = 60
+
+--- A sub-agent's own messages, thoughts and checklist, kept off the chat.
+local SUBAGENT_CONTENT_UPDATES = {
+    user_message_chunk = true,
+    agent_message_chunk = true,
+    agent_thought_chunk = true,
+    plan = true,
+}
+
+--- @param update agentic.acp.SessionUpdateMessage
+--- @return boolean summarised
+local function is_summarised_subagent_update(update)
+    return Config.tool_calls.subagent_activity == "summary"
+        and SUBAGENT_CONTENT_UPDATES[update.sessionUpdate] == true
+        and ACPPayloads.get_parent_tool_call_id(update) ~= nil
+end
 
 local ALREADY_STARTED_ERROR = {
     code = -32600,
@@ -95,6 +113,7 @@ function SessionManager:new(agent, provider_name, on_new_session)
     self.agent = agent
 
     self.chat_history = ChatHistory:new()
+    self.subagent_activity = SubagentActivity:new()
 
     self.widget = ChatWidget:new(function(input_text)
         return self:_handle_input_submit(input_text)
@@ -306,7 +325,9 @@ end
 --- @param update agentic.acp.SessionUpdateMessage
 --- @param replaying boolean|nil
 function SessionManager:_on_session_update(update, replaying)
-    if update.sessionUpdate == "user_message_chunk" then
+    if is_summarised_subagent_update(update) then
+        -- The summary on the launching tool call counts tool calls only.
+    elseif update.sessionUpdate == "user_message_chunk" then
         if replaying then
             local text = update.content
                 and update.content.type == "text"
@@ -408,7 +429,60 @@ function SessionManager:_on_tool_call(tool_call, replaying)
         return
     end
 
+    local parent_id = tool_call.parent_tool_call_id
+    if
+        parent_id
+        and self:_summarise_subagent_tool_call(parent_id, tool_call, replaying)
+    then
+        return
+    end
+
     self:_write_tool_call(tool_call)
+end
+
+--- A sub-agent call that already has a block, because it asked for
+--- permission, is updated like any other block.
+--- @param parent_id string
+--- @param tool_call agentic.ui.MessageWriter.ToolCallBlock
+--- @param replaying boolean|nil
+--- @return boolean summarised
+function SessionManager:_summarise_subagent_tool_call(
+    parent_id,
+    tool_call,
+    replaying
+)
+    if
+        Config.tool_calls.subagent_activity ~= "summary"
+        or self.message_writer.tool_call_blocks[tool_call.tool_call_id]
+    then
+        return false
+    end
+
+    local merged = self.subagent_activity:record(parent_id, tool_call)
+
+    local parent = self.message_writer.tool_call_blocks[parent_id]
+    local summary = self.subagent_activity:summarise(parent_id)
+    if parent and not vim.deep_equal(parent.subagent_summary, summary) then
+        self:_on_tool_call_update(
+            { tool_call_id = parent_id, subagent_summary = summary },
+            replaying
+        )
+    end
+
+    if tool_call.status == "completed" then
+        self:_reload_edited_file(merged, replaying)
+    end
+
+    return true
+end
+
+--- Permission buttons render inside the tool call's block.
+--- @param tool_call_id string
+function SessionManager:_reveal_subagent_tool_call(tool_call_id)
+    local hidden = self.subagent_activity:get_tool_call(tool_call_id)
+    if hidden and not self.message_writer.tool_call_blocks[tool_call_id] then
+        self:_write_tool_call(vim.deepcopy(hidden))
+    end
 end
 
 --- @param tool_call agentic.ui.MessageWriter.ToolCallBlock
@@ -427,6 +501,18 @@ end
 --- @param tool_call_update agentic.ui.MessageWriter.ToolCallBlock
 --- @param replaying boolean|nil
 function SessionManager:_on_tool_call_update(tool_call_update, replaying)
+    local parent_id = tool_call_update.parent_tool_call_id
+    if
+        parent_id
+        and self:_summarise_subagent_tool_call(
+            parent_id,
+            tool_call_update,
+            replaying
+        )
+    then
+        return
+    end
+
     if
         not self.message_writer.tool_call_blocks[tool_call_update.tool_call_id]
     then
@@ -800,6 +886,7 @@ function SessionManager:_build_handlers(is_replaying)
                 end
             end
 
+            self:_reveal_subagent_tool_call(request.toolCall.toolCallId)
             self.diff_coordinator:show(request.toolCall.toolCallId)
             self.permission_manager:add_request(request, wrapped_callback)
         end,

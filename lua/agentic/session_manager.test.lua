@@ -1183,6 +1183,7 @@ describe("agentic.SessionManager", function()
                 is_generating = true,
                 _start_spinner = SessionManager._start_spinner,
                 _reload_edited_file = SessionManager._reload_edited_file,
+                _reveal_subagent_tool_call = function() end,
                 diff_coordinator = {
                     clear = function() end,
                     diff_state = {},
@@ -1940,6 +1941,7 @@ describe("agentic.SessionManager", function()
                 _on_session_update = function() end,
                 _on_tool_call = function() end,
                 _on_tool_call_update = function() end,
+                _reveal_subagent_tool_call = function() end,
                 _build_handlers = SessionManager._build_handlers,
             } --[[@as agentic.SessionManager]]
         end)
@@ -3304,5 +3306,312 @@ describe("agentic.SessionManager one-shot lifecycle", function()
         state_clear_stub:revert()
         widget_destroy_stub:revert()
         writer_destroy_stub:revert()
+    end)
+end)
+
+describe("agentic.SessionManager sub-agent activity", function()
+    local ACPClient = require("agentic.acp.acp_client")
+    local Config = require("agentic.config")
+    local MessageWriter = require("agentic.ui.message_writer")
+
+    local PARENT_ID = "toolu_01Agent"
+    local SUMMARY_HEADER =
+        " think(Explore the repo) · sub-agent: 2 tool calls, last: execute(git log) "
+
+    --- @type TestStub
+    local get_instance_stub
+    --- @type TestStub
+    local notify_stub
+    --- @type TestStub
+    local schedule_stub
+    --- @type TestStub
+    local health_check_stub
+    --- @type TestStub
+    local checktime_stub
+    --- @type agentic.UserConfig.ToolCalls.SubagentActivity
+    local original_activity
+    --- @type agentic.SessionManager
+    local session
+    --- @type integer[]
+    local extra_buffers
+
+    before_each(function()
+        local AgentInstance = require("agentic.acp.agent_instance")
+        local ACPHealth = require("agentic.acp.acp_health")
+
+        original_activity = Config.tool_calls.subagent_activity
+        extra_buffers = {}
+        notify_stub = spy.stub(Logger, "notify")
+        checktime_stub = spy.stub(vim.cmd, "checktime")
+        schedule_stub = spy.stub(vim, "schedule")
+        schedule_stub:invokes(function(fn)
+            fn()
+        end)
+        health_check_stub = spy.stub(ACPHealth, "check_configured_provider")
+        health_check_stub:returns(true)
+        get_instance_stub = spy.stub(AgentInstance, "get_instance")
+        get_instance_stub:invokes(function(provider_name)
+            --- @type agentic.acp.ACPClient
+            local fake = {}
+            fake.provider_config = { name = provider_name or "Test" }
+            fake.agent_info = {}
+            function fake:cancel_session() end
+            return fake
+        end)
+
+        session = new_test_manager()
+        session.session_id = "test-session" --[[@as string]]
+    end)
+
+    after_each(function()
+        session:destroy()
+        for _, bufnr in ipairs(extra_buffers) do
+            vim.api.nvim_buf_delete(bufnr, { force = true })
+        end
+        Config.tool_calls.subagent_activity = original_activity
+        notify_stub:revert()
+        checktime_stub:revert()
+        schedule_stub:revert()
+        health_check_stub:revert()
+        get_instance_stub:revert()
+    end)
+
+    --- @param tool_name string
+    local function subagent_meta(tool_name)
+        return {
+            claudeCode = { toolName = tool_name, parentToolUseId = PARENT_ID },
+        }
+    end
+
+    local AGENT_CALL = {
+        sessionUpdate = "tool_call",
+        toolCallId = PARENT_ID,
+        title = "Explore the repo",
+        kind = "think",
+        status = "pending",
+        rawInput = {
+            description = "Explore the repo",
+            prompt = "Find the session manager",
+            subagent_type = "Explore",
+        },
+        content = {
+            {
+                type = "content",
+                content = { type = "text", text = "Find the session manager" },
+            },
+        },
+        _meta = { claudeCode = { toolName = "Agent" } },
+    }
+
+    --- @param id string
+    --- @param command string
+    local function bash_call(id, command)
+        return {
+            sessionUpdate = "tool_call",
+            toolCallId = id,
+            title = command,
+            kind = "execute",
+            status = "pending",
+            rawInput = { command = command, description = "Run " .. command },
+            _meta = subagent_meta("Bash"),
+        }
+    end
+
+    --- @param id string
+    --- @param tool_name string
+    --- @param output string
+    local function completed(id, tool_name, output)
+        return {
+            sessionUpdate = "tool_call_update",
+            toolCallId = id,
+            status = "completed",
+            content = {
+                {
+                    type = "content",
+                    content = { type = "text", text = output },
+                },
+            },
+            _meta = subagent_meta(tool_name),
+        }
+    end
+
+    local SUBAGENT_TEXT = {
+        sessionUpdate = "agent_message_chunk",
+        content = { type = "text", text = "Sub-agent report text" },
+        _meta = subagent_meta(nil),
+    }
+
+    --- @param update table
+    --- @return agentic.ui.MessageWriter.ToolCallBlock
+    local function to_block(update)
+        return ACPClient.__build_tool_call_message(ACPClient, update)
+    end
+
+    --- @param replaying boolean
+    local function deliver_subagent_run(replaying)
+        local handlers = session:_build_handlers(function()
+            return replaying
+        end)
+        handlers.on_tool_call(to_block(AGENT_CALL))
+        handlers.on_tool_call(to_block(bash_call("toolu_c1", "git status")))
+        handlers.on_tool_call_update(
+            to_block(completed("toolu_c1", "Bash", "On branch main"))
+        )
+        handlers.on_session_update(SUBAGENT_TEXT)
+        handlers.on_tool_call(to_block(bash_call("toolu_c2", "git log")))
+    end
+
+    --- @param bufnr integer|nil
+    --- @return string[] lines
+    local function chat_lines(bufnr)
+        return vim.api.nvim_buf_get_lines(
+            bufnr or session.widget.buf_nrs.chat,
+            0,
+            -1,
+            false
+        )
+    end
+
+    --- @param lines string[]
+    --- @param needle string
+    local function has_line(lines, needle)
+        return vim.tbl_contains(lines, needle)
+    end
+
+    --- @param lines string[]
+    --- @param text string
+    local function mentions(lines, text)
+        return table.concat(lines, "\n"):find(text, 1, true) ~= nil
+    end
+
+    it("renders each sub-agent call as its own block by default", function()
+        deliver_subagent_run(false)
+
+        local lines = chat_lines()
+        assert.is_true(has_line(lines, " execute(git status) "))
+        assert.is_true(has_line(lines, " execute(git log) "))
+        assert.is_false(mentions(lines, "· sub-agent:"))
+    end)
+
+    it("summarises sub-agent activity on the Agent call", function()
+        Config.tool_calls.subagent_activity = "summary"
+
+        deliver_subagent_run(false)
+
+        local lines = chat_lines()
+        assert.is_true(has_line(lines, SUMMARY_HEADER))
+        assert.is_false(has_line(lines, " execute(git status) "))
+        assert.is_false(has_line(lines, " execute(git log) "))
+        assert.is_false(mentions(lines, "On branch main"))
+        assert.is_false(mentions(lines, "Sub-agent report text"))
+        assert.is_nil(session.message_writer.tool_call_blocks["toolu_c1"])
+    end)
+
+    it("summarises the same way while replaying a session", function()
+        Config.tool_calls.subagent_activity = "summary"
+
+        deliver_subagent_run(true)
+
+        local lines = chat_lines()
+        assert.is_true(has_line(lines, SUMMARY_HEADER))
+        assert.is_false(has_line(lines, " execute(git status) "))
+    end)
+
+    it("keeps only the summary in history for a provider switch", function()
+        Config.tool_calls.subagent_activity = "summary"
+        deliver_subagent_run(false)
+
+        local bufnr = vim.api.nvim_create_buf(false, true)
+        extra_buffers[#extra_buffers + 1] = bufnr
+        local writer = MessageWriter:new(bufnr)
+        writer:replay_history_messages(
+            vim.deepcopy(session.chat_history.messages)
+        )
+
+        local lines = chat_lines(bufnr)
+        assert.is_true(has_line(lines, SUMMARY_HEADER))
+        assert.is_false(has_line(lines, " execute(git status) "))
+        assert.is_false(mentions(lines, "Sub-agent report text"))
+    end)
+
+    it("gives a sub-agent permission request a block", function()
+        Config.tool_calls.subagent_activity = "summary"
+        local handlers = session:_build_handlers()
+        handlers.on_tool_call(to_block(AGENT_CALL))
+
+        local request = {
+            sessionId = "test-session",
+            toolCall = bash_call("toolu_c3", "rm -rf build"),
+            options = {
+                { optionId = "allow", name = "Allow", kind = "allow_once" },
+                { optionId = "reject", name = "Reject", kind = "reject_once" },
+            },
+        }
+        -- ACPClient's order: the tool call update, then the request.
+        handlers.on_tool_call_update(to_block(request.toolCall))
+        handlers.on_request_permission(request, function() end)
+
+        assert.is_true(has_line(chat_lines(), " execute(rm -rf build) "))
+        assert.is_not_nil(session.message_writer:get_button_row("toolu_c3", 1))
+
+        handlers.on_tool_call_update(
+            to_block(completed("toolu_c3", "Bash", "removed"))
+        )
+
+        assert.equal(
+            "completed",
+            session.message_writer.tool_call_blocks["toolu_c3"].status
+        )
+        assert.is_false(session.permission_manager:has_pending())
+        assert.is_true(
+            has_line(
+                chat_lines(),
+                " think(Explore the repo) · sub-agent: 1 tool call, last: execute(rm -rf build) "
+            )
+        )
+    end)
+
+    it("keeps a sub-agent's todo list out of the todo panel", function()
+        Config.tool_calls.subagent_activity = "summary"
+        local render_stub = spy.stub(session.todo_list, "render")
+        local entries = {
+            { content = "Read files", priority = "medium", status = "pending" },
+        }
+
+        session:_on_session_update({
+            sessionUpdate = "plan",
+            entries = entries,
+            _meta = subagent_meta("TodoWrite"),
+        })
+        local subagent_renders = #render_stub.calls
+        session:_on_session_update({ sessionUpdate = "plan", entries = entries })
+        render_stub:revert()
+
+        assert.equal(0, subagent_renders)
+        assert.equal(1, #render_stub.calls)
+    end)
+
+    it("reloads buffers when a summarised call edits a file", function()
+        Config.tool_calls.subagent_activity = "summary"
+        local handlers = session:_build_handlers()
+        handlers.on_tool_call(to_block(AGENT_CALL))
+        handlers.on_tool_call(to_block({
+            sessionUpdate = "tool_call",
+            toolCallId = "toolu_edit",
+            title = "Edit lua/init.lua",
+            kind = "edit",
+            status = "pending",
+            locations = { { path = "lua/init.lua" } },
+            _meta = subagent_meta("Edit"),
+        }))
+
+        assert.spy(checktime_stub).was.called(0)
+
+        handlers.on_tool_call_update(
+            to_block(completed("toolu_edit", "Edit", "done"))
+        )
+
+        assert.spy(checktime_stub).was.called(1)
+        assert.is_nil(session.message_writer.tool_call_blocks["toolu_edit"])
     end)
 end)

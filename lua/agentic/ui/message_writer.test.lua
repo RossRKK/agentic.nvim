@@ -1467,6 +1467,7 @@ describe("agentic.ui.MessageWriter", function()
     describe("tool call title truncation", function()
         before_each(function()
             Config.tool_calls = {
+                subagent_activity = "full",
                 title = {
                     max_length = 50,
                     truncate_title_kinds = {
@@ -1587,6 +1588,7 @@ describe("agentic.ui.MessageWriter", function()
     describe("sub-agent summary", function()
         before_each(function()
             Config.tool_calls = {
+                subagent_activity = "full",
                 title = { max_length = 20, truncate_title_kinds = {} },
             }
         end)
@@ -1653,7 +1655,9 @@ describe("agentic.ui.MessageWriter", function()
             }))
 
             assert.is_true(
-                content_has("sub%-agent: 1 tool call, last: read%(Read init.lua%)")
+                content_has(
+                    "sub%-agent: 1 tool call, last: read%(Read init.lua%)"
+                )
             )
         end)
 
@@ -1952,6 +1956,7 @@ describe("agentic.ui.MessageWriter", function()
 
         it("renders truncated title body on replay", function()
             Config.tool_calls = {
+                subagent_activity = "full",
                 title = {
                     max_length = 50,
                     truncate_title_kinds = { "fetch" },
@@ -2522,6 +2527,7 @@ describe("agentic.ui.MessageWriter", function()
 
         it("counts rendered long title body toward fold threshold", function()
             Config.tool_calls = {
+                subagent_activity = "full",
                 title = {
                     max_length = 50,
                     truncate_title_kinds = { "execute" },

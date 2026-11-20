@@ -1169,6 +1169,31 @@ longer than `max_length` are truncated to `max_length` bytes plus `...`; the
 full title is rendered in the folded body. Negative values are clamped to 0.
 Diff tool calls keep full header-only titles.
 
+                                        *agentic-subagent-activity-config*
+Sub-agent activity ~
+>lua
+  --- @type agentic.PartialUserConfig
+  opts = {
+    tool_calls = {
+      subagent_activity = "summary",  -- "full" (default) or "summary"
+    },
+  }
+<
+
+With `"full"`, every message, thought, todo list and tool call a sub-agent
+makes is written to the chat as if the main agent made it. With `"summary"`,
+they stay out of the chat and the todo list, and the tool call that launched
+the sub-agent shows a live summary in its header:
+>text
+   think(Explore) · sub-agent: 12 tool calls, last: execute(git status)
+<
+A sub-agent tool call that asks for permission still gets its own block, with
+the permission buttons. Sub-agent file edits still reload open buffers and
+fire `on_file_edit`, and `on_session_update` still receives sub-agent
+updates. The summary needs the provider to attribute sub-agent updates to
+their launching tool call, as Claude Agent ACP does with
+`_meta.claudeCode.parentToolUseId`; other providers are unaffected.
+
 ==============================================================================
 INTEGRATIONS                                      *agentic-integrations*
 

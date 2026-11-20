@@ -238,9 +238,14 @@
 --- @field max_length integer Maximum title length before truncation. 0 disables truncation.
 --- @field truncate_title_kinds agentic.acp.ToolKind[] Tool kinds affected by max_length.
 
+--- How the chat shows what a sub-agent does: every message and tool call as
+--- its own block, or only a live summary on the tool call that launched it.
+--- @alias agentic.UserConfig.ToolCalls.SubagentActivity "full"|"summary"
+
 --- Tool call display configuration
 --- @class agentic.UserConfig.ToolCalls
 --- @field title agentic.UserConfig.ToolCalls.Title
+--- @field subagent_activity agentic.UserConfig.ToolCalls.SubagentActivity
 
 --- @class agentic.UserConfig.Hooks
 --- @field before_first_prompt? fun(data: agentic.UserConfig.BeforeFirstPromptData): string|nil Extra text appended after the environment info on the first prompt. Runs synchronously and blocks the prompt while it runs
@@ -630,6 +635,7 @@ local ConfigDefault = {
                 "search",
             },
         },
+        subagent_activity = "full",
     },
 
     hooks = {

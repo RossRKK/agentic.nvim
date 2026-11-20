@@ -638,6 +638,34 @@ Only `truncate_title_kinds` are affected by `max_length`. Titles longer than
 rendered in the folded body. Set `max_length = 0` to disable title truncation.
 Negative values are clamped to 0. Diff tool calls keep full header-only titles.
 
+### Sub-agent Activity
+
+By default every message, thought, todo list and tool call a sub-agent makes is
+written to the chat as if the main agent made it. Set
+`subagent_activity = "summary"` to keep them out of the chat and the todo list,
+and show one live summary on the tool call that launched the sub-agent instead:
+
+```text
+ think(Explore the repo) · sub-agent: 12 tool calls, last: execute(git status)
+```
+
+```lua
+--- @type agentic.PartialUserConfig
+opts = {
+  tool_calls = {
+    subagent_activity = "summary", -- "full" (default) or "summary"
+  },
+}
+```
+
+A sub-agent tool call that asks for permission still gets its own block, with
+the permission buttons, and keeps it after you answer. File edits made by a
+sub-agent still reload open buffers and fire the `on_file_edit` hook, and the
+`on_session_update` hook still receives the sub-agent's updates. The summary
+needs the provider to attribute sub-agent updates to their launching tool call,
+which Claude Agent ACP does with `_meta.claudeCode.parentToolUseId`; other
+providers show their activity as before.
+
 ## 🚀 Usage (Public Lua API)
 
 ### Commands
