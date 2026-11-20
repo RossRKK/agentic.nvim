@@ -1182,6 +1182,7 @@ describe("agentic.SessionManager", function()
                 status_animation = { start = function() end },
                 is_generating = true,
                 _start_spinner = SessionManager._start_spinner,
+                _reload_edited_file = SessionManager._reload_edited_file,
                 diff_coordinator = {
                     clear = function() end,
                     diff_state = {},

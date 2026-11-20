@@ -408,6 +408,11 @@ function SessionManager:_on_tool_call(tool_call, replaying)
         return
     end
 
+    self:_write_tool_call(tool_call)
+end
+
+--- @param tool_call agentic.ui.MessageWriter.ToolCallBlock
+function SessionManager:_write_tool_call(tool_call)
     self.message_writer:write_tool_call_block(tool_call)
 
     local merged = self.message_writer.tool_call_blocks[tool_call.tool_call_id]
@@ -474,42 +479,48 @@ function SessionManager:_on_tool_call_update(tool_call_update, replaying)
         )
     end
 
-    if tool_call_update.status == "completed" then
-        if
-            tracker
-            and tracker.kind
-            and ACPPayloads.FILE_MUTATING_KINDS[tracker.kind]
-        then
-            vim.cmd.checktime()
-
-            -- Skip the hook during restore replay: the provider replays
-            -- historical tool calls as "completed" but no write happened now.
-            if
-                not replaying
-                and type(tracker.file_path) == "string"
-                and tracker.file_path ~= ""
-            then
-                local abs_path = FileSystem.to_absolute_path(tracker.file_path)
-                local raw_bufnr = vim.fn.bufnr(abs_path)
-                local is_loaded = raw_bufnr ~= -1
-                    and vim.api.nvim_buf_is_loaded(raw_bufnr)
-                --- @type number|nil
-                local bufnr = is_loaded and raw_bufnr or nil
-                --- @type agentic.UserConfig.FileEditData
-                local hook_data = {
-                    filepath = abs_path,
-                    session_id = self.session_id,
-                    session_key = self.session_key,
-                    tab_page_id = self.widget:get_visible_tab_id(),
-                    bufnr = bufnr,
-                }
-                Hooks.invoke("on_file_edit", hook_data)
-            end
-        end
+    if tool_call_update.status == "completed" and tracker then
+        self:_reload_edited_file(tracker, replaying)
     end
 
     if not self.permission_manager:has_pending() then
         self:_start_spinner("generating")
+    end
+end
+
+--- @param tracker agentic.ui.MessageWriter.ToolCallBlock A completed tool call
+--- @param replaying boolean|nil
+function SessionManager:_reload_edited_file(tracker, replaying)
+    if
+        not tracker.kind or not ACPPayloads.FILE_MUTATING_KINDS[tracker.kind]
+    then
+        return
+    end
+
+    vim.cmd.checktime()
+
+    -- Skip the hook during restore replay: the provider replays
+    -- historical tool calls as "completed" but no write happened now.
+    if
+        not replaying
+        and type(tracker.file_path) == "string"
+        and tracker.file_path ~= ""
+    then
+        local abs_path = FileSystem.to_absolute_path(tracker.file_path)
+        local raw_bufnr = vim.fn.bufnr(abs_path)
+        local is_loaded = raw_bufnr ~= -1
+            and vim.api.nvim_buf_is_loaded(raw_bufnr)
+        --- @type number|nil
+        local bufnr = is_loaded and raw_bufnr or nil
+        --- @type agentic.UserConfig.FileEditData
+        local hook_data = {
+            filepath = abs_path,
+            session_id = self.session_id,
+            session_key = self.session_key,
+            tab_page_id = self.widget:get_visible_tab_id(),
+            bufnr = bufnr,
+        }
+        Hooks.invoke("on_file_edit", hook_data)
     end
 end
 
