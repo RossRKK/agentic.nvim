@@ -615,9 +615,16 @@ agentic.switch_provider({opts})
                             picker.
 
                                              *agentic.stop_generation()*
-agentic.stop_generation()
+agentic.stop_generation({opts})
   Stop the agent's current generation or tool execution. The
   session remains active and ready for the next prompt.
+
+  Parameters: ~
+    {opts}  (table|nil)  Optional fields:
+      `session`  (integer)  Session key to stop. Defaults to the
+                            session visible in this tab, else the
+                            most recently opened one. An unknown key
+                            stops nothing.
 
                                              *agentic.restore_session()*
 agentic.restore_session()

@@ -116,6 +116,7 @@ describe("agentic: switch_provider", function()
             end
 
             function fake_agent:cancel_session() end
+            function fake_agent:stop_generation() end
 
             return fake_agent
         end
@@ -876,6 +877,28 @@ describe("agentic: switch_provider", function()
         assert.spy(permission_clear_stub).was.called(1)
         assert.is_false(session.is_generating)
         assert.spy(anim_stop_spy).was.called(1)
+    end)
+
+    it("stop_generation stops the named session, not the current one", function()
+        local Agentic = require("agentic")
+
+        local named = create_session()
+        named.session_id = "named-session-id" --[[@as string]]
+        named.is_generating = true
+        local current = create_session()
+        current.session_id = "current-session-id" --[[@as string]]
+        current.is_generating = true
+        assert.equal(current, SessionRegistry.current())
+
+        local stop_generation_stub = track_stub(named.agent, "stop_generation")
+
+        Agentic.stop_generation({ session = named.session_key })
+
+        assert
+            .spy(stop_generation_stub).was
+            .called_with(named.agent, "named-session-id")
+        assert.is_false(named.is_generating)
+        assert.is_true(current.is_generating)
     end)
 
     -- Creation spawns a provider subprocess. Stopping generation with nothing

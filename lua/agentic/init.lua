@@ -14,6 +14,9 @@ local Agentic = {}
 --- @class agentic.DestroySessionOpts
 --- @field session? integer Session key to destroy; defaults to the resolved session
 
+--- @class agentic.StopOpts
+--- @field session? integer Session key to stop; defaults to the resolved session
+
 --- @param session agentic.SessionManager
 --- @param opts agentic.ui.ChatWidget.ShowOpts|agentic.ui.ChatWidget.AddToContextOpts|nil
 local function show_session(session, opts)
@@ -225,8 +228,9 @@ function Agentic.switch_provider(opts)
 end
 
 --- Stops the agent's current generation or tool execution, keeping the session alive
-function Agentic.stop_generation()
-    local session = SessionRegistry.current()
+--- @param opts agentic.StopOpts|nil
+function Agentic.stop_generation(opts)
+    local session = Agentic._stop_target(opts)
 
     if not session then
         return
@@ -239,6 +243,17 @@ function Agentic.stop_generation()
     session.permission_manager:clear()
     session.is_generating = false
     session.status_animation:stop()
+end
+
+--- An explicit key names exactly one session, unknown or not; without one, the resolved session.
+--- @param opts agentic.StopOpts|nil
+--- @return agentic.SessionManager|nil
+function Agentic._stop_target(opts)
+    local key = opts and opts.session
+    if key then
+        return SessionRegistry.get(key)
+    end
+    return SessionRegistry.current()
 end
 
 --- show a selector to restore a previous session
