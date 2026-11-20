@@ -185,6 +185,17 @@ describe("agentic.ui.StatusAnimation", function()
             end
         )
 
+        it("stays below lines appended between frames", function()
+            animation:start("generating")
+
+            vim.api.nvim_buf_set_lines(bufnr, -1, -1, false, { "three" })
+            vim.api.nvim_buf_set_text(bufnr, 2, 5, 2, 5, { "", "four" })
+
+            local marks = extmarks()
+            assert.equal(1, #marks)
+            assert.equal(3, marks[1][2])
+        end)
+
         it("renders without padding when no window shows the buffer", function()
             animation:start("generating")
 
