@@ -323,4 +323,20 @@ describe("FilePicker keymap fallback", function()
 
         assert.is_false(child.g[prop_name])
     end)
+
+    it("takes the first item when the menu has nothing selected", function()
+        load_file_picker()
+        child.bo.completeopt = "menu,menuone,noselect"
+        child.api.nvim_buf_set_lines(0, 0, -1, false, { "hello help", "" })
+        child.api.nvim_win_set_cursor(0, { 2, 0 })
+
+        child.type_keys("i", "hel", "<C-x><C-n>")
+        assert.equal(
+            -1,
+            child.lua_get([[vim.fn.complete_info({ "selected" }).selected]])
+        )
+        child.type_keys("<Tab>")
+
+        assert.equal("hello ", child.api.nvim_buf_get_lines(0, 1, 2, false)[1])
+    end)
 end)

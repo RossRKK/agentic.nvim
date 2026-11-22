@@ -70,7 +70,9 @@ end
 --- Neovim handles fuzzy filtering automatically via completeopt
 --- @param bufnr integer The input buffer number
 function SlashCommands.setup_completion(bufnr)
-    vim.bo[bufnr].completeopt = "menu,menuone,noinsert,popup,fuzzy"
+    vim.bo[bufnr].completeopt = Config.completion.preselect
+            and "menu,menuone,noinsert,popup,fuzzy"
+        or "menu,menuone,noselect,popup,fuzzy"
 
     -- Include `-` as keyword character so completion doesn't close when typing it
     vim.bo[bufnr].iskeyword = vim.bo[bufnr].iskeyword .. ",-"

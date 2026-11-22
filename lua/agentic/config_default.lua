@@ -211,6 +211,10 @@
 --- @class agentic.UserConfig.SlashCommands
 --- @field auto_trigger boolean When false, disables automatic completion triggering on /
 
+--- Shared by the / and @ menus of the prompt buffer
+--- @class agentic.UserConfig.Completion
+--- @field preselect boolean When false, the menu opens with nothing selected: <Tab> takes the first item, <CR> keeps the typed text
+
 --- @class agentic.UserConfig.ImagePaste
 --- @field enabled boolean Enable image drag-and-drop to add images to referenced files
 
@@ -286,6 +290,7 @@
 --- @class (partial) agentic.PartialUserConfig.ChatIcons: agentic.UserConfig.ChatIcons
 --- @class (partial) agentic.PartialUserConfig.MessageIcons: agentic.UserConfig.MessageIcons
 --- @class (partial) agentic.PartialUserConfig.SlashCommands: agentic.UserConfig.SlashCommands
+--- @class (partial) agentic.PartialUserConfig.Completion: agentic.UserConfig.Completion
 --- @class (partial) agentic.PartialUserConfig.FilePicker: agentic.UserConfig.FilePicker
 --- @class (partial) agentic.PartialUserConfig.ImagePaste: agentic.UserConfig.ImagePaste
 --- @class (partial) agentic.PartialUserConfig.AutoScroll: agentic.UserConfig.AutoScroll
@@ -328,6 +333,7 @@
 --- @field message_icons? agentic.PartialUserConfig.MessageIcons
 --- @field file_picker? agentic.PartialUserConfig.FilePicker
 --- @field slash_commands? agentic.PartialUserConfig.SlashCommands
+--- @field completion? agentic.PartialUserConfig.Completion
 --- @field image_paste? agentic.PartialUserConfig.ImagePaste
 --- @field auto_scroll? agentic.PartialUserConfig.AutoScroll
 --- @field diff_preview? agentic.PartialUserConfig.DiffPreview
@@ -350,6 +356,7 @@
 --- @field message_icons agentic.UserConfig.MessageIcons
 --- @field file_picker agentic.UserConfig.FilePicker
 --- @field slash_commands agentic.UserConfig.SlashCommands
+--- @field completion agentic.UserConfig.Completion
 --- @field image_paste agentic.UserConfig.ImagePaste
 --- @field auto_scroll agentic.UserConfig.AutoScroll
 --- @field diff_preview agentic.UserConfig.DiffPreview
@@ -601,6 +608,10 @@ local ConfigDefault = {
 
     slash_commands = {
         auto_trigger = true,
+    },
+
+    completion = {
+        preselect = true,
     },
 
     image_paste = {

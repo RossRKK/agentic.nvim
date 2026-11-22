@@ -146,6 +146,18 @@ describe("agentic.acp.SlashCommands", function()
             assert.equal("menu,menuone,noinsert,popup,fuzzy", completeopt)
         end)
 
+        it("selects nothing when preselect is off", function()
+            local Config = require("agentic.config")
+            Config.completion.preselect = false
+            local other = vim.api.nvim_create_buf(false, true)
+            SlashCommands.setup_completion(other)
+            local completeopt = vim.bo[other].completeopt
+            Config.completion.preselect = true
+            vim.api.nvim_buf_delete(other, { force = true })
+
+            assert.equal("menu,menuone,noselect,popup,fuzzy", completeopt)
+        end)
+
         it("adds '-' to iskeyword", function()
             local iskeyword = vim.bo[bufnr].iskeyword
             assert.is_true(iskeyword:match(",-") ~= nil)

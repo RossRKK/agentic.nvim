@@ -52,6 +52,10 @@ end
 local COMPLETION_ACCEPT =
     vim.api.nvim_replace_termcodes("<C-y> ", true, true, true)
 
+--- With nothing selected, <C-n> first selects the top item for <C-y> to take
+local COMPLETION_ACCEPT_FIRST =
+    vim.api.nvim_replace_termcodes("<C-n><C-y> ", true, true, true)
+
 --- Sets up omnifunc completion and @ trigger detection
 --- @param bufnr number
 function FilePicker:_setup_completion(bufnr)
@@ -65,7 +69,9 @@ function FilePicker:_setup_completion(bufnr)
         bufnr,
         function()
             if vim.fn.pumvisible() == 1 then
-                return COMPLETION_ACCEPT
+                local selected = vim.fn.complete_info({ "selected" }).selected
+                return selected == -1 and COMPLETION_ACCEPT_FIRST
+                    or COMPLETION_ACCEPT
             end
 
             return ""

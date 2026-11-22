@@ -1134,6 +1134,12 @@ File picker ~
       -- Use <C-x><C-u> to trigger manual completion.
       auto_trigger = true,
     },
+
+    completion = {
+      -- When false, the / and @ menus open with nothing selected:
+      -- <Tab> takes the first item and <CR> keeps the typed text.
+      preselect = true,
+    },
   }
 <
 
