@@ -5,6 +5,7 @@ agentic-chat-icons	agentic.txt	/*agentic-chat-icons*
 agentic-config-acp-configs	agentic.txt	/*agentic-config-acp-configs*
 agentic-config-acp-providers	agentic.txt	/*agentic-config-acp-providers*
 agentic-config-diff-preview	agentic.txt	/*agentic-config-diff-preview*
+agentic-config-header-align	agentic.txt	/*agentic-config-header-align*
 agentic-config-headers	agentic.txt	/*agentic-config-headers*
 agentic-config-hooks	agentic.txt	/*agentic-config-hooks*
 agentic-config-provider	agentic.txt	/*agentic-config-provider*

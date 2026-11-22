@@ -20,6 +20,9 @@
 --- Per-panel window header: either `{ title, suffix }` or a render function.
 --- @alias agentic.UserConfig.Headers table<agentic.ui.ChatWidget.PanelNames, agentic.ui.ChatWidget.HeaderParts|agentic.UserConfig.HeaderRenderFn|nil>
 
+--- "full" puts the title at the left and runs its highlight to the right edge
+--- @alias agentic.UserConfig.HeaderAlign "left"|"center"|"right"|"full"
+
 --- Data passed to the on_create_session_response hook
 --- @class agentic.UserConfig.CreateSessionResponseData
 --- @field session_id? string Convenience field; equals response.sessionId when response is non-nil, nil if creation failed
@@ -364,6 +367,7 @@
 --- @field tool_calls agentic.UserConfig.ToolCalls
 --- @field hooks agentic.UserConfig.Hooks
 --- @field headers agentic.UserConfig.Headers
+--- @field header_align agentic.UserConfig.HeaderAlign Where a panel's title sits in its winbar
 --- @field agent_name? fun(session_id: string): string|nil Names the agent in the chat's headings; nil keeps the provider's name
 --- @field acp_configs agentic.UserConfig.ACPConfigs
 --- @field settings agentic.UserConfig.Settings
@@ -661,6 +665,7 @@ local ConfigDefault = {
     },
 
     headers = {},
+    header_align = "center",
 
     agent_name = nil,
 

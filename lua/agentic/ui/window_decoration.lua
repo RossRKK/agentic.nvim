@@ -38,13 +38,28 @@ local WINDOW_HEADERS = {
 }
 
 --- @class agentic.ui.WindowDecoration.Config
---- @field align? "left"|"center"|"right"
 --- @field hl? string Header text
 --- @field reverse_hl? string Separator
 local default_config = {
-    align = "center",
     hl = Theme.HL_GROUPS.WIN_BAR_TITLE,
     reverse_hl = "NormalFloat",
+}
+
+--- A winbar around `title`, which carries its own highlight, per `header_align`
+--- @type table<agentic.UserConfig.HeaderAlign, fun(title: string): string>
+local WINBAR_LAYOUTS = {
+    left = function(title)
+        return title .. "%#Normal#%="
+    end,
+    center = function(title)
+        return "%=" .. title .. "%#Normal#%="
+    end,
+    right = function(title)
+        return "%=" .. title .. "%#Normal#"
+    end,
+    full = function(title)
+        return title .. "%="
+    end,
 }
 
 --- @param parts agentic.ui.ChatWidget.HeaderParts
@@ -245,21 +260,10 @@ local function set_winbar(winid, text)
         return
     end
 
-    local opts = default_config
+    local title = string.format("%%#%s# %s ", default_config.hl, text)
+    local layout = WINBAR_LAYOUTS[Config.header_align] or WINBAR_LAYOUTS.center
 
-    local winbar_text = string.format("%%#%s# %s %%#Normal#", opts.hl, text)
-
-    if opts.align == "left" then
-        winbar_text = winbar_text .. "%="
-    elseif opts.align == "center" then
-        winbar_text = "%=" .. winbar_text .. "%="
-    elseif opts.align == "right" then
-        winbar_text = "%=" .. winbar_text
-    end
-
-    winbar_text = "%#Normal#" .. winbar_text
-
-    vim.wo[winid][0].winbar = winbar_text
+    vim.wo[winid][0].winbar = "%#Normal#" .. layout(title)
 end
 
 --- Mirrors nvim's own symlink resolution and cwd prefixing, so a name can be

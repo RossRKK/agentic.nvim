@@ -382,6 +382,13 @@ headers ~
   }
 <
 
+                                          *agentic-config-header-align*
+header_align ~
+  Type: `"left"|"center"|"right"|"full"`, default `"center"`
+
+  Where each panel's title sits in its winbar. `"full"` puts the title
+  at the left and runs its highlight to the window's right edge.
+
                                           *agentic-session-state*
 Session state ~
 

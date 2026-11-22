@@ -565,6 +565,23 @@ describe("WindowDecoration.render_header", function()
         assert.is_true(winbar:find("Agentic Chat", 1, true) ~= nil)
     end)
 
+    it("runs the title's highlight to the right edge when full", function()
+        child.lua([[
+            require("agentic.config").header_align = "full"
+            local bufnr = vim.api.nvim_create_buf(false, true)
+            vim.api.nvim_win_set_buf(0, bufnr)
+            require("agentic.ui.window_decoration").render_header(bufnr, "chat", nil, nil)
+        ]])
+        child.flush()
+
+        local hl =
+            child.lua_get([[require("agentic.theme").HL_GROUPS.WIN_BAR_TITLE]])
+        assert.equal(
+            "%#Normal#%#" .. hl .. "# 󰻞 Agentic Chat %=",
+            child.lua_get([[vim.wo[0].winbar]])
+        )
+    end)
+
     it("skips a non-focusable window when resolving the target", function()
         child.lua([[
             local WindowDecoration = require("agentic.ui.window_decoration")
