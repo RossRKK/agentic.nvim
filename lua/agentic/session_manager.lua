@@ -83,6 +83,22 @@ local function title_from_prompt(prompt)
     return title
 end
 
+--- @param ids string[]
+--- @return string[] ids each id once, first occurrence kept
+local function unique(ids)
+    --- @type table<string, true>
+    local seen = {}
+    --- @type string[]
+    local result = {}
+    for _, id in ipairs(ids) do
+        if not seen[id] then
+            seen[id] = true
+            result[#result + 1] = id
+        end
+    end
+    return result
+end
+
 --- @param agent agentic.acp.ACPClient
 --- @param provider_name agentic.UserConfig.ProviderName
 --- @param on_new_session fun(session: agentic.SessionManager)
@@ -583,6 +599,7 @@ end
 
 --- The Agent call headers scroll away as output arrives, so the running ones are pinned to the chat's end.
 --- Regression: session_manager.test.lua::"pins each running sub-agent to the end of the chat"
+--- Regression: session_manager.test.lua::"pins a running sub-agent once during its parent's turn"
 function SessionManager:_refresh_subagent_footer()
     -- A child session reports its own work state, which outlives the parent's turn.
     local ids = self.subagent_roster:working_ids()
@@ -590,7 +607,9 @@ function SessionManager:_refresh_subagent_footer()
     if self.is_generating then
         vim.list_extend(ids, self.message_writer:list_running_launch_ids())
     end
-    self.status_animation:set_footer(self.message_writer:list_headers(ids))
+    self.status_animation:set_footer(
+        self.message_writer:list_headers(unique(ids))
+    )
 end
 
 --- Each announced child session is a block in the chat, its header carrying its work so far.

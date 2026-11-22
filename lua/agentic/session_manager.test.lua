@@ -3989,6 +3989,16 @@ describe("agentic.SessionManager sub-agent footer", function()
             assert.equal(vim.api.nvim_buf_line_count(chat) - 1, row)
         end)
 
+        it("pins a running sub-agent once during its parent's turn", function()
+            local handlers = handlers_for(false)
+            session.is_generating = true
+
+            associate(handlers, { kind = "running" })
+            child_runs_bash(handlers)
+
+            assert.equal({ CHILD_HEADER }, (footer()))
+        end)
+
         it(
             "unpins a sub-agent that goes idle, keeping it in the chat",
             function()
