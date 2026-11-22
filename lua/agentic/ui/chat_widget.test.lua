@@ -2470,6 +2470,31 @@ describe("agentic.ui.ChatWidget in a host window (child)", function()
         assert.is_true(child.lua_get("vim.api.nvim_win_is_valid(_G.host)"))
     end)
 
+    for _, pinned in ipairs({ false, true }) do
+        it(
+            ("leaves the host %s, as its owner set it"):format(
+                pinned and "pinned" or "unpinned"
+            ),
+            function()
+                child.lua(([[
+                    vim.wo[_G.host].winfixwidth = %s
+                    vim.wo[_G.host].winfixheight = %s
+                    _G.widget:show({ win = _G.host, focus_prompt = false })
+                ]]):format(pinned, pinned))
+                child.flush()
+
+                assert.equal(
+                    pinned,
+                    child.lua_get("vim.wo[_G.host].winfixwidth")
+                )
+                assert.equal(
+                    pinned,
+                    child.lua_get("vim.wo[_G.host].winfixheight")
+                )
+            end
+        )
+    end
+
     it("carries the folds made while hidden into a host it left", function()
         child.lua([[
             local Fold = require("agentic.ui.tool_call_fold")

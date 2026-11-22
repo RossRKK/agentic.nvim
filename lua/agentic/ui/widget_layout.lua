@@ -111,27 +111,43 @@ local PANEL_WINDOW_OPTS = {
     winhighlight = "EndOfBuffer:",
 }
 
+--- @param window_name agentic.ui.ChatWidget.PanelNames
+--- @param win_opts table<string, any>
+--- @return table<string, any>
+local function panel_window_opts(window_name, win_opts)
+    local window_config = Config.windows[window_name] or {}
+    local config_win_opts = window_config.win_opts or {}
+
+    return vim.tbl_deep_extend("force", {
+        wrap = true,
+        linebreak = true,
+        winfixheight = true,
+    }, PANEL_WINDOW_OPTS, win_opts or {}, config_win_opts)
+end
+
+--- @param winid integer
+--- @param bufnr integer
+--- @param opts table<string, any>
+local function set_panel_window_opts(winid, bufnr, opts)
+    -- Read by BufferGuard to resolve the window's rightful buffer.
+    vim.w[winid].agentic_bufnr = bufnr
+
+    -- `[0]` is the `:setlocal` sentinel; without it these leak to buffers that later cohabit the window.
+    for name, value in pairs(opts) do
+        vim.wo[winid][0][name] = value
+    end
+end
+
 --- @param winid integer
 --- @param bufnr integer
 --- @param window_name agentic.ui.ChatWidget.PanelNames
 --- @param win_opts table<string, any>
 local function apply_panel_window_opts(winid, bufnr, window_name, win_opts)
-    -- Read by BufferGuard to resolve the window's rightful buffer.
-    vim.w[winid].agentic_bufnr = bufnr
-
-    local window_config = Config.windows[window_name] or {}
-    local config_win_opts = window_config.win_opts or {}
-
-    local merged_win_opts = vim.tbl_deep_extend("force", {
-        wrap = true,
-        linebreak = true,
-        winfixheight = true,
-    }, PANEL_WINDOW_OPTS, win_opts or {}, config_win_opts)
-
-    -- `[0]` is the `:setlocal` sentinel; without it these leak to buffers that later cohabit the window.
-    for name, value in pairs(merged_win_opts) do
-        vim.wo[winid][0][name] = value
-    end
+    set_panel_window_opts(
+        winid,
+        bufnr,
+        panel_window_opts(window_name, win_opts)
+    )
 end
 
 --- @param bufnr integer
@@ -232,7 +248,11 @@ local function adopt_host_window(win_nrs, host_win, bufnr, win_opts)
     end
 
     win_nrs.chat = host_win
-    apply_panel_window_opts(host_win, bufnr, "chat", win_opts)
+    local opts = panel_window_opts("chat", win_opts)
+    -- The host's size is its owner's: pinned, it keeps a width its owner gave it for another layout.
+    opts.winfixwidth = nil
+    opts.winfixheight = nil
+    set_panel_window_opts(host_win, bufnr, opts)
     WindowDecoration.render_header(bufnr, "chat")
 end
 
