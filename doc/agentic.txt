@@ -827,6 +827,8 @@ auto-completion. The `/new` command is always available. Other
 commands are provided by your ACP provider. When a current session
 exists, `/new` asks whether to keep it running in the background or
 destroy it.
+Sending `/clear` empties the chat once the provider has cleared its
+context, so the chat shows only what the agent still remembers.
 
 File picker ~
                                                   *agentic-file-picker*

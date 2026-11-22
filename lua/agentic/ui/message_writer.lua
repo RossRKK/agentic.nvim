@@ -113,6 +113,24 @@ function MessageWriter:reset_sender_tracking()
     self:_clear_thinking_state()
 end
 
+--- Empties the chat buffer and forgets what was written, keeping the writer usable
+function MessageWriter:clear()
+    BufHelpers.with_modifiable(self.bufnr, function(bufnr)
+        for _, ns in ipairs({
+            NS_TOOL_BLOCKS,
+            NS_DIFF_HIGHLIGHTS,
+            NS_STATUS,
+            NS_THINKING,
+        }) do
+            vim.api.nvim_buf_clear_namespace(bufnr, ns, 0, -1)
+        end
+        vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, {})
+    end)
+    self.tool_call_blocks = {}
+    self._last_message_type = nil
+    self:reset_sender_tracking()
+end
+
 --- Clears thinking block tracking state.
 --- Called when a non-thought write breaks the thinking flow.
 function MessageWriter:_clear_thinking_state()

@@ -829,6 +829,8 @@ function SessionManager:_handle_input_submit(input_text)
 
     -- Captured, NOT re-read below: this is the staleness guard.
     local session_id = self.session_id
+    -- The agent clears its own context; the chat only shows what it still holds.
+    local clears_context = input_text:match("^/clear%s*$") ~= nil
 
     self.is_generating = true
 
@@ -842,6 +844,9 @@ function SessionManager:_handle_input_submit(input_text)
             self.status_animation:stop()
             self.is_generating = false
             self:_refresh_subagent_footer()
+            if clears_context and not err then
+                self:_clear_chat()
+            end
 
             --- @type agentic.UserConfig.ResponseCompleteData
             local response_hook_data = {
@@ -856,6 +861,12 @@ function SessionManager:_handle_input_submit(input_text)
     end)
 
     return true
+end
+
+--- Empties the chat and the history it would resend, as the agent's /clear did its context
+function SessionManager:_clear_chat()
+    self.message_writer:clear()
+    self.chat_history.messages = {}
 end
 
 --- Every handler re-checks `_destroyed` at RUN time: `__with_subscriber` schedules

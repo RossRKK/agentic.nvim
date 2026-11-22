@@ -221,6 +221,23 @@ describe("agentic.ui.MessageWriter", function()
         )
     end
 
+    describe("clear", function()
+        it("empties the buffer and forgets its tool call blocks", function()
+            writer:write_tool_call_block(make_tool_call_block("t1", "pending"))
+            local NS_TOOL_BLOCKS =
+                require("agentic.ui.tool_call_blocks").NS_TOOL_BLOCKS
+
+            writer:clear()
+
+            assert.equal({ "" }, get_all_lines())
+            assert.equal(
+                {},
+                vim.api.nvim_buf_get_extmarks(bufnr, NS_TOOL_BLOCKS, 0, -1, {})
+            )
+            assert.equal({}, writer.tool_call_blocks)
+        end)
+    end)
+
     describe("_check_auto_scroll", function()
         it(
             "returns true when cursor is within threshold of buffer end",

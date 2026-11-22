@@ -1697,6 +1697,110 @@ describe("agentic.SessionManager", function()
         end)
     end)
 
+    describe("_handle_input_submit /clear", function()
+        local ChatHistory = require("agentic.ui.chat_history")
+        local MessageWriter = require("agentic.ui.message_writer")
+        --- @type TestStub
+        local schedule_stub
+        --- @type integer
+        local chat_buf
+        --- @type fun(response: table|nil, err: table|nil)|nil
+        local send_prompt_callback
+
+        before_each(function()
+            send_prompt_callback = nil
+            chat_buf = vim.api.nvim_create_buf(false, true)
+            schedule_stub = spy.stub(vim, "schedule")
+            schedule_stub:invokes(function(fn)
+                fn()
+            end)
+        end)
+
+        after_each(function()
+            schedule_stub:revert()
+            vim.api.nvim_buf_delete(chat_buf, { force = true })
+        end)
+
+        --- A session with a real chat buffer that already holds one exchange.
+        --- @return agentic.SessionManager
+        local function make_session()
+            local empty = {
+                is_empty = function()
+                    return true
+                end,
+            }
+            local session = {
+                session_id = "session-1",
+                is_generating = false,
+                _is_first_message = false,
+                chat_history = ChatHistory:new(),
+                message_writer = MessageWriter:new(chat_buf),
+                todo_list = { close_if_all_completed = function() end },
+                code_selection = empty,
+                file_list = empty,
+                diagnostics_list = empty,
+                status_animation = {
+                    start = function() end,
+                    stop = function() end,
+                },
+                widget = { get_visible_tab_id = function() end },
+                agent = {
+                    provider_config = { name = "TestProvider" },
+                    send_prompt = function(_self, _sid, _prompt, callback)
+                        send_prompt_callback = callback
+                    end,
+                },
+                can_submit_prompt = function()
+                    return true
+                end,
+                _handle_input_submit = SessionManager._handle_input_submit,
+                _refresh_subagent_footer = function() end,
+            }
+            setmetatable(session, { __index = SessionManager })
+            --- @cast session agentic.SessionManager
+            session:_handle_input_submit("hello")
+            --- @diagnostic disable-next-line: need-check-nil
+            send_prompt_callback({ stopReason = "end_turn" }, nil)
+            return session
+        end
+
+        --- @return string
+        local function chat_text()
+            return table.concat(
+                vim.api.nvim_buf_get_lines(chat_buf, 0, -1, false),
+                "\n"
+            )
+        end
+
+        it("empties the chat once the agent has cleared its context", function()
+            local session = make_session()
+            assert.is_true(chat_text():find("hello", 1, true) ~= nil)
+
+            session:_handle_input_submit("/clear")
+            --- @diagnostic disable-next-line: need-check-nil
+            send_prompt_callback({ stopReason = "end_turn" }, nil)
+
+            assert.equal("", chat_text())
+            assert.equal({}, session.chat_history.messages)
+        end)
+
+        it("keeps the chat when the /clear turn fails", function()
+            local session = make_session()
+
+            session:_handle_input_submit("/clear")
+            --- @diagnostic disable-next-line: need-check-nil
+            send_prompt_callback(nil, { code = -1, message = "boom" })
+
+            assert.is_true(chat_text():find("hello", 1, true) ~= nil)
+        end)
+
+        it("keeps the chat after any other prompt", function()
+            make_session()
+
+            assert.is_true(chat_text():find("hello", 1, true) ~= nil)
+        end)
+    end)
+
     describe("send_prompt callback ignores stale session", function()
         --- @type TestStub
         local schedule_stub
