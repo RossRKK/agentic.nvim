@@ -150,9 +150,12 @@ function StatusAnimation:_draw()
     local virt_lines = { { { "" } } }
     vim.list_extend(virt_lines, body)
 
-    local grew = #virt_lines > self:_count_drawn_lines()
-
     local line_count = vim.api.nvim_buf_line_count(self._bufnr)
+    local following = self:_list_following_windows(line_count)
+    local rows_before = vim.tbl_map(function(winid)
+        return self:_count_end_rows(winid, line_count)
+    end, following)
+
     self._extmark_id = vim.api.nvim_buf_set_extmark(
         self._bufnr,
         NS_ANIMATION,
@@ -162,45 +165,40 @@ function StatusAnimation:_draw()
             id = self._extmark_id,
             virt_lines = virt_lines,
             virt_lines_above = false,
+            -- A sub-agent header in the footer is often wider than the chat.
+            -- Regression: status_animation.test.lua::"wraps a footer line wider than the window"
+            virt_lines_overflow = "wrap",
         }
     )
 
     -- Auto-scroll runs before the status changes, so new rows would open below a following window's view.
     -- Regression: status_animation.test.lua::"scrolls a window that follows the end to show added rows"
-    if grew then
-        self:_scroll_following_windows(line_count)
-    end
-end
-
---- @return integer count Virtual lines on screen now
-function StatusAnimation:_count_drawn_lines()
-    if not self._extmark_id then
-        return 0
-    end
-
-    local mark = vim.api.nvim_buf_get_extmark_by_id(
-        self._bufnr,
-        NS_ANIMATION,
-        self._extmark_id,
-        { details = true }
-    )
-    local details = mark[3]
-    return details and details.virt_lines and #details.virt_lines or 0
-end
-
---- A window with its cursor on the last line follows the end, as auto-scroll leaves it.
---- @param line_count integer
-function StatusAnimation:_scroll_following_windows(line_count)
-    for _, winid in ipairs(vim.fn.win_findbuf(self._bufnr)) do
-        if
-            BufHelpers.is_win_usable(winid)
-            and vim.api.nvim_win_get_cursor(winid)[1] == line_count
-        then
+    -- Regression: status_animation.test.lua::"scrolls a following window when a footer line wraps onto another row"
+    for i, winid in ipairs(following) do
+        if self:_count_end_rows(winid, line_count) > rows_before[i] then
             vim.api.nvim_win_call(winid, function()
                 vim.cmd("noautocmd normal! zb")
             end)
         end
     end
+end
+
+--- A window with its cursor on the last line follows the end, as auto-scroll leaves it.
+--- @param line_count integer
+--- @return integer[] winids
+function StatusAnimation:_list_following_windows(line_count)
+    return vim.tbl_filter(function(winid)
+        return BufHelpers.is_win_usable(winid)
+            and vim.api.nvim_win_get_cursor(winid)[1] == line_count
+    end, vim.fn.win_findbuf(self._bufnr))
+end
+
+--- Wrapped virtual lines take more rows than there are lines, so the window measures them.
+--- @param winid integer
+--- @param line_count integer
+--- @return integer rows Screen rows from the buffer's last line down, its virtual lines included
+function StatusAnimation:_count_end_rows(winid, line_count)
+    return vim.api.nvim_win_text_height(winid, { start_row = line_count - 1 }).all
 end
 
 --- @return agentic.ui.StatusAnimation.VirtLine spinner_line

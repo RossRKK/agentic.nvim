@@ -309,6 +309,36 @@ describe("agentic.ui.StatusAnimation", function()
                 end
             )
 
+            local LONG_LINE = {
+                { " think(Explore) · sub-agent: ", "Comment" },
+                { "2 tool calls, last: execute(git status --short) ", "Title" },
+            }
+
+            it("wraps a footer line wider than the window", function()
+                animation:set_footer({ LONG_LINE })
+
+                assert.equal("wrap", extmarks()[1][4].virt_lines_overflow)
+                -- The last line, then a blank and the footer line across two rows.
+                local rows =
+                    vim.api.nvim_win_text_height(winid, { start_row = 29 }).all
+                assert.equal(4, rows)
+            end)
+
+            it(
+                "scrolls a following window when a footer line wraps onto another row",
+                function()
+                    animation:set_footer({ { { " think(Explore) " } } })
+                    vim.api.nvim_win_call(winid, function()
+                        vim.cmd("normal! G0zb")
+                    end)
+                    assert.is_true(shows_whole_end())
+
+                    animation:set_footer({ LONG_LINE })
+
+                    assert.is_true(shows_whole_end())
+                end
+            )
+
             it("leaves a window reading further up where it is", function()
                 vim.api.nvim_win_call(winid, function()
                     vim.cmd("normal! 20Gzt")
