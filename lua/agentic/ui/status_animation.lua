@@ -12,74 +12,7 @@ local TIMING = {
     busy = 100,
 }
 
---- Columns a wrapped footer line's continuation rows are indented by.
-local CONTINUATION_INDENT = 4
-
 --- @alias agentic.ui.StatusAnimation.VirtLine [string, string][] Text and highlight group chunks
-
---- Splits a line into rows of at most `width` columns, breaking between words where it can.
---- @param line agentic.ui.StatusAnimation.VirtLine
---- @param width integer
---- @return agentic.ui.StatusAnimation.VirtLine[] rows
-local function wrap_line(line, width)
-    local line_width = 0
-    for _, chunk in ipairs(line) do
-        line_width = line_width + vim.fn.strdisplaywidth(chunk[1])
-    end
-    if line_width <= width or width <= CONTINUATION_INDENT then
-        return { line }
-    end
-
-    --- @type agentic.ui.StatusAnimation.VirtLine[]
-    local rows = { {} }
-    local used = 0
-    local row_has_text = false
-
-    local function break_row()
-        rows[#rows + 1] = { { string.rep(" ", CONTINUATION_INDENT) } }
-        used = CONTINUATION_INDENT
-        row_has_text = false
-    end
-
-    --- @param text string
-    --- @param hl string|nil
-    local function append(text, hl)
-        local row = rows[#rows]
-        local last = row[#row]
-        if row_has_text and last[2] == hl then
-            last[1] = last[1] .. text
-        else
-            row[#row + 1] = { text, hl }
-        end
-        used = used + vim.fn.strdisplaywidth(text)
-        row_has_text = true
-    end
-
-    for _, chunk in ipairs(line) do
-        local hl = chunk[2]
-        for token in chunk[1]:gmatch("%s*%S*") do
-            if
-                row_has_text
-                and used + vim.fn.strdisplaywidth(token) > width
-            then
-                token = token:gsub("^%s+", "")
-                if token ~= "" then
-                    break_row()
-                end
-            end
-            -- A word wider than a whole row is cut wherever the row ends.
-            for _, char in ipairs(vim.fn.split(token, "\\zs")) do
-                local char_width = vim.fn.strdisplaywidth(char)
-                if row_has_text and used + char_width > width then
-                    break_row()
-                end
-                append(char, hl)
-            end
-        end
-    end
-
-    return rows
-end
 
 --- Spinner and footer, kept as virtual lines below the chat buffer's last line.
 --- @class agentic.ui.StatusAnimation
@@ -107,7 +40,6 @@ function StatusAnimation:new(bufnr)
     }, StatusAnimation)
 
     instance:_follow_buffer_end()
-    instance:_follow_window_width()
 
     return instance
 end
@@ -121,34 +53,6 @@ function StatusAnimation:_follow_buffer_end()
 
     vim.api.nvim_buf_attach(self._bufnr, false, {
         on_lines = function()
-            if self._extmark_id then
-                self:_draw()
-            end
-        end,
-    })
-end
-
---- Wrapped rows are cut to the window's width, so a resize or a new window redraws them.
---- Regression: status_animation.test.lua::"rewraps the footer when the window is resized"
-function StatusAnimation:_follow_window_width()
-    if not vim.api.nvim_buf_is_valid(self._bufnr) then
-        return
-    end
-
-    vim.api.nvim_create_autocmd("BufWinEnter", {
-        buffer = self._bufnr,
-        callback = function()
-            if self._extmark_id then
-                self:_draw()
-            end
-        end,
-    })
-
-    vim.api.nvim_create_autocmd("WinResized", {
-        callback = function()
-            if not vim.api.nvim_buf_is_valid(self._bufnr) then
-                return true
-            end
             if self._extmark_id then
                 self:_draw()
             end
@@ -228,12 +132,7 @@ function StatusAnimation:_draw()
     if self._state then
         body = { self:_build_spinner_line(), { { "" } } }
     end
-    -- Virtual lines never wrap, so a footer line wider than the window would be cut off.
-    -- Regression: status_animation.test.lua::"wraps a footer line wider than the window"
-    local width = self:_text_width()
-    for _, line in ipairs(self._footer) do
-        vim.list_extend(body, width and wrap_line(line, width) or { line })
-    end
+    vim.list_extend(body, self._footer)
 
     if #body == 0 then
         if self._extmark_id then
@@ -271,16 +170,6 @@ function StatusAnimation:_draw()
     if grew then
         self:_scroll_following_windows(line_count)
     end
-end
-
---- @return integer|nil width Text columns of the window showing the buffer, nil when none does
-function StatusAnimation:_text_width()
-    local winid = BufHelpers.find_visible_win(self._bufnr)
-    if not winid then
-        return nil
-    end
-    local info = vim.fn.getwininfo(winid)[1]
-    return info.width - info.textoff
 end
 
 --- @return integer count Virtual lines on screen now
