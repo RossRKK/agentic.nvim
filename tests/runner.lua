@@ -12,6 +12,11 @@ end
 
 --- @param fn function
 local function run_with_exit(fn)
+    -- nvim reports an error in tests/init.lua and carries on regardless
+    if vim.v.errmsg ~= "" then
+        exit_with_error("tests/init.lua failed: " .. vim.v.errmsg)
+    end
+
     local ok, err = pcall(fn)
     if ok then
         exit_success()
