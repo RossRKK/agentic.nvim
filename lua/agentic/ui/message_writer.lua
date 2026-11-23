@@ -197,10 +197,10 @@ function MessageWriter:_maybe_write_sender_header(session_update_type)
                 string.format("%s - %s", header, os.date("%Y-%m-%d %H:%M:%S"))
         end
     else
+        -- A named agent is its own heading; only a provider's name needs marking as the agent.
         local name = self._agent_name and self._agent_name()
-            or self._provider_name
-            or "unknown"
-        header = sender_heading("###", icons.agent, "Agent - " .. name)
+            or ("Agent - " .. (self._provider_name or "unknown"))
+        header = sender_heading("###", icons.agent, name)
     end
 
     BufHelpers.with_modifiable(self.bufnr, function()

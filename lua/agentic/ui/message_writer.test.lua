@@ -1730,7 +1730,7 @@ describe("agentic.ui.MessageWriter", function()
         end)
 
         it(
-            "heads agent messages with the agent's name when it has one",
+            "heads agent messages with just the agent's name when it has one",
             function()
                 writer:set_provider_name("TestAgent")
                 writer:set_agent_name(function()
@@ -1740,10 +1740,8 @@ describe("agentic.ui.MessageWriter", function()
                     make_update("response", "agent_message_chunk")
                 )
 
-                assert.equal(
-                    1,
-                    count_matching_lines("### .* Agent %- calm%-otter$")
-                )
+                assert.equal(1, count_matching_lines("^### %S+%s+calm%-otter$"))
+                assert.equal(0, count_matching_lines("Agent"))
             end
         )
 

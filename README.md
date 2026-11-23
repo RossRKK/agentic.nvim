@@ -1346,9 +1346,9 @@ chat. An empty string leaves the heading without one:
 
 ### Naming the Agent in the Chat
 
-Agent messages are headed `Agent - <provider name>`. To head them with a name of
-your own per session, such as the name your agent CLI gave it, return it from
-`agent_name`; returning `nil` keeps the provider's name:
+Agent messages are headed `Agent - <provider name>`. To head them with just a
+name of your own per session, such as the name your agent CLI gave it, return it
+from `agent_name`; returning `nil` keeps `Agent - <provider name>`:
 
 ```lua
 {
