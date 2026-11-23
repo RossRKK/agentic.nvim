@@ -42,7 +42,7 @@ If in doubt, ask first
 
 ## Prerequisites
 
-- Neovim **v0.11.5+** (LuaJIT 2.1, Lua 5.1 semantics)
+- Neovim **v0.13.0+**, currently nightly (LuaJIT 2.1, Lua 5.1 semantics)
 - [`stylua`](https://github.com/JohnnyMorganz/StyLua),
   [`selene`](https://github.com/Kampfkarren/selene),
   [`lua-language-server`](https://github.com/LuaLS/lua-language-server)

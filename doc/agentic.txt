@@ -63,7 +63,7 @@ Supported providers:
 ==============================================================================
 REQUIREMENTS                                      *agentic-requirements*
 
-- Neovim v0.11.0 or higher
+- Neovim v0.13.0 or higher (currently nightly)
 - An ACP provider CLI (must be in PATH or an absolute path)
 
 For security reasons, this plugin does not install or manage binaries.
@@ -1356,7 +1356,7 @@ Option 2 -- global enabled function: ~
 HEALTH CHECK                                      *agentic-health-check*
 
 Run `:checkhealth agentic` to verify:
-  - Neovim version (>= 0.11.0 required)
+  - Neovim version (>= 0.13.0 required)
   - Current ACP provider installation
   - Optional ACP providers availability
   - Node.js and package managers

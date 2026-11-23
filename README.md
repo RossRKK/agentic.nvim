@@ -212,7 +212,7 @@ https://github.com/user-attachments/assets/c6653a8b-20ef-49c8-b644-db0df1b342f0
 
 ## 📋 Requirements
 
-- **Neovim** v0.11.0 or higher
+- **Neovim** v0.13.0 or higher (currently nightly)
 - **ACP Provider CLI** - Install the CLI for any ACP-compatible provider of your
   choice
   - For security reasons, this plugin doesn't install or manage binaries for
@@ -1619,7 +1619,7 @@ Verify your installation and dependencies:
 
 This will check:
 
-- Neovim version (≥ 0.11.0 required)
+- Neovim version (≥ 0.13.0 required)
 - Current ACP provider installation (We don't install them for security reasons)
 - Optional ACP providers (so you know which ones are available and can use at
   any time)

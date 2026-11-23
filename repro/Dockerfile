@@ -5,7 +5,7 @@ FROM ubuntu:noble
 ENV LUALS_VERSION=3.16.2 \
   STYLUA_VERSION=2.3.1 \
   SELENE_VERSION=0.30.0 \
-  NVIM_VERSION=0.11.5 \
+  NVIM_VERSION=nightly \
   DEBIAN_FRONTEND=noninteractive
 
 # Install minimal dependencies
@@ -25,7 +25,7 @@ RUN mkdir -p /opt/nvim /opt/luals /usr/local/bin
 # Install Neovim (detect architecture)
 RUN ARCH=$(uname -m) && \
   if [ "$ARCH" = "aarch64" ]; then NVIM_ARCH="linux-arm64"; else NVIM_ARCH="linux-x86_64"; fi && \
-  curl -sL "https://github.com/neovim/neovim/releases/download/v${NVIM_VERSION}/nvim-${NVIM_ARCH}.tar.gz" | \
+  curl -sL "https://github.com/neovim/neovim/releases/download/${NVIM_VERSION}/nvim-${NVIM_ARCH}.tar.gz" | \
   tar xzf - --strip-components=1 -C /opt/nvim && \
   ln -sf /opt/nvim/bin/nvim /usr/local/bin/nvim
 

@@ -4,7 +4,7 @@ Slim Docker image with all PR check tools matching the CI pipeline environment.
 
 ## Tools Included
 
-- **Neovim** v0.11.5
+- **Neovim** nightly (0.13)
 - **LuaLS** (Lua Language Server) v3.16.2
 - **StyLua** v2.3.1
 - **Selene** v0.30.0

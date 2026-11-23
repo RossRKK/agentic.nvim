@@ -1,7 +1,7 @@
 # Agents Guide
 
 **agentic.nvim** is a Neovim plugin that emulates Cursor AI IDE behavior,
-providing AI-driven code assistance through a chat interface. Neovim 0.11+,
+providing AI-driven code assistance through a chat interface. Neovim 0.13+,
 LuaJIT 2.1 (Lua 5.1 semantics).
 
 Reach every other instruction file through the router below. Skip any file

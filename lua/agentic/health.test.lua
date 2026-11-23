@@ -78,6 +78,35 @@ describe("Health", function()
         package.loaded["agentic.ui.clipboard_image"] = original_clipboard_image
     end)
 
+    describe("Neovim version", function()
+        --- @type TestStub
+        local version_stub
+
+        after_each(function()
+            version_stub:revert()
+        end)
+
+        it("accepts a 0.13 nightly", function()
+            version_stub = spy.stub(vim, "version")
+            version_stub:returns({ major = 0, minor = 13, patch = 0 })
+
+            Health.check()
+
+            assert.spy(ok_stub).was.called_with("Neovim version 0.13.0")
+        end)
+
+        it("rejects 0.12, which cannot wrap virtual lines", function()
+            version_stub = spy.stub(vim, "version")
+            version_stub:returns({ major = 0, minor = 12, patch = 4 })
+
+            Health.check()
+
+            assert
+                .spy(error_stub).was
+                .called_with("Neovim >= 0.13.0 required (current: 0.12.4)")
+        end)
+    end)
+
     it("warns when WSL PowerShell interop is missing", function()
         executable_stub:invokes(function(name)
             return name == "wslpath" and 1 or 0
