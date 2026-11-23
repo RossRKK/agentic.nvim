@@ -614,13 +614,9 @@ function MessageWriter:update_tool_call_block(tool_call_block)
     end
 
     BufHelpers.with_modifiable(self.bufnr, function(bufnr)
-        vim.api.nvim_buf_set_lines(
-            bufnr,
-            start_row,
-            start_row + 1,
-            false,
-            { self:_build_header_line(tracker) }
-        )
+        vim.api.nvim_buf_set_lines(bufnr, start_row, start_row + 1, false, {
+            self:_build_header_line(tracker, self:_get_title_max_length()),
+        })
 
         -- Diff blocks don't change after the initial render
         -- only update status highlights - don't replace content
@@ -711,27 +707,30 @@ end
 
 --- Build the header line string for a tool call block
 --- @param tool_call_block agentic.ui.MessageWriter.ToolCallBlock
+--- @param max_length integer Characters an argument is cut to; 0 cuts nothing, as in tool_calls.title
 --- @return string header
-function MessageWriter:_build_header_line(tool_call_block)
+function MessageWriter:_build_header_line(tool_call_block, max_length)
     local kind = tool_call_block.kind or "other"
-    local argument = self:_build_header_argument(tool_call_block)
+    local argument = self:_build_header_argument(tool_call_block, max_length)
     local header = string.format(" %s(%s) ", kind, argument)
 
     local summary = tool_call_block.subagent_summary
     if summary then
-        header = header .. self:_build_subagent_summary(summary) .. " "
+        header = header
+            .. self:_build_subagent_summary(summary, max_length)
+            .. " "
     end
 
     return header
 end
 
 --- @param summary agentic.ui.MessageWriter.SubagentSummary
+--- @param max_length integer Characters the latest call's argument is cut to; 0 cuts nothing
 --- @return string text
-function MessageWriter:_build_subagent_summary(summary)
+function MessageWriter:_build_subagent_summary(summary, max_length)
     local noun = summary.tool_call_count == 1 and "tool call" or "tool calls"
     local argument = (summary.latest_argument or ""):gsub("\n", "\\n")
 
-    local max_length = self:_get_title_max_length()
     if max_length > 0 and vim.fn.strchars(argument) > max_length then
         argument = vim.fn.strcharpart(argument, 0, max_length) .. "..."
     end
@@ -762,7 +761,8 @@ function MessageWriter:list_running_launch_ids()
     return ids
 end
 
---- The header of each listed block, in chat order.
+--- The header of each listed block, in chat order, uncut: no block body below shows the rest.
+--- Regression: message_writer.test.lua::"lists a header whole however long its arguments"
 --- @param tool_call_ids string[]
 --- @return agentic.ui.StatusAnimation.VirtLine[] headers
 function MessageWriter:list_headers(tool_call_ids)
@@ -783,7 +783,7 @@ function MessageWriter:list_headers(tool_call_ids)
     return vim.tbl_map(function(entry)
         return {
             {
-                self:_build_header_line(entry.block),
+                self:_build_header_line(entry.block, 0),
                 Theme.get_status_hl_group(entry.block.status),
             },
         }
@@ -791,15 +791,15 @@ function MessageWriter:list_headers(tool_call_ids)
 end
 
 --- @param tool_call_block agentic.ui.MessageWriter.ToolCallBlock
+--- @param max_length integer Characters the argument is cut to; 0 cuts nothing
 --- @return string argument
-function MessageWriter:_build_header_argument(tool_call_block)
+function MessageWriter:_build_header_argument(tool_call_block, max_length)
     local argument = tool_call_block.argument or ""
 
     -- Sanitize argument to prevent newlines in the header line
     -- nvim_buf_set_lines doesn't accept array items with embedded newlines
     argument = argument:gsub("\n", "\\n")
 
-    local max_length = self:_get_title_max_length()
     if
         max_length > 0
         and #argument > max_length
@@ -886,7 +886,7 @@ function MessageWriter:_prepare_block_lines(tool_call_block)
     local kind = tool_call_block.kind
 
     local lines = {
-        self:_build_header_line(tool_call_block),
+        self:_build_header_line(tool_call_block, self:_get_title_max_length()),
         "",
     }
 

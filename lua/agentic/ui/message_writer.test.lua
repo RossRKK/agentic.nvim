@@ -1690,6 +1690,26 @@ describe("agentic.ui.MessageWriter", function()
             )
         end)
 
+        it("lists a header whole however long its arguments", function()
+            Config.tool_calls.title.truncate_title_kinds = { "think" }
+            local block = make_agent_block({
+                tool_call_count = 3,
+                latest_kind = "execute",
+                latest_argument = "git log --oneline --decorate -20",
+            })
+            block.argument =
+                "Test footer wrapping with a deliberately long sub-agent title"
+            writer:write_tool_call_block(block)
+
+            local headers = writer:list_headers({ "toolu_agent" })
+
+            assert.equal(
+                " think(Test footer wrapping with a deliberately long sub-agent title) · sub-agent: 3 tool calls, last: execute(git log --oneline --decorate -20) ",
+                headers[1][1][1]
+            )
+            assert.is_true(content_has("think%(Test footer wrapping%.%.%.%)"))
+        end)
+
         it("leaves a block without a summary unchanged", function()
             writer:write_tool_call_block(make_agent_block(nil))
 
