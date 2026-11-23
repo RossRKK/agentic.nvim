@@ -70,21 +70,39 @@ describe("FilePicker:scan_files", function()
             FilePicker.CMD_FD[1] = "echo"
             FilePicker.CMD_GIT[1] = "echo"
 
+            local real_system = vim.fn.system
+            --- scan_files reads vim.v.shell_error, so the stub must set it too
+            local function exits_with(output, code)
+                return real_system({
+                    "sh",
+                    "-c",
+                    'printf %s "$1"; exit "$2"',
+                    "sh",
+                    output,
+                    tostring(code),
+                })
+            end
+
+            local listings_run = {}
             system_stub = spy.stub(vim.fn, "system")
-            system_stub:invokes(function(_cmd)
-                -- First call returns empty (simulates failure)
-                -- Second call returns files (simulates success)
-                if system_stub.call_count == 1 then
-                    return ""
-                else
-                    return "file1.lua\nfile2.lua\nfile3.lua\n"
+            system_stub:invokes(function(cmd)
+                if type(cmd) == "string" then -- the git repo probe
+                    return exits_with(".git\n", 0)
                 end
+                table.insert(listings_run, cmd[2])
+                if cmd[2] == FilePicker.CMD_RG[2] then
+                    return exits_with("", 1)
+                end
+                return exits_with("file1.lua\nfile2.lua\nfile3.lua\n", 0)
             end)
 
             local files = picker:scan_files()
 
-            -- Should have called system exactly 2 times (first fails, second succeeds)
-            assert.equal(2, system_stub.call_count)
+            -- rg fails, fd succeeds, git is never run
+            assert.same(
+                { FilePicker.CMD_RG[2], FilePicker.CMD_FD[2] },
+                listings_run
+            )
             assert.equal(3, #files)
         end)
     end)
