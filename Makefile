@@ -13,10 +13,10 @@ LOGDIR  ?= .luals-log
 .PHONY: luals selene selene-file format-check format format-file check test validate install-hooks rules
 
 test:
-	$(NVIM) --headless -i NONE -n -u tests/init.lua -c "lua require('tests.runner').run()"
+	$(NVIM) --headless -i NONE -n -u tests/init.lua -c "lua require('tests.runner').run()" -c "cquit 1"
 
 test-file:
-	$(NVIM) --headless -i NONE -n -u tests/init.lua -c "lua require('tests.runner').run_file('$(FILE)')"
+	$(NVIM) --headless -i NONE -n -u tests/init.lua -c "lua require('tests.runner').run_file('$(FILE)')" -c "cquit 1"
 
 # Lua Language Server headless diagnosis report
 luals:
