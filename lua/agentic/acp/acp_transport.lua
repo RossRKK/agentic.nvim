@@ -106,6 +106,9 @@ function M.create_stdio_transport(config, callbacks)
         for k, v in pairs(vim.fn.environ()) do
             env_map[k] = v
         end
+        -- nvim's own environ lacks $NVIM; add it as jobstart and vim.system do.
+        env_map["NVIM"] = vim.v.servername
+        env_map["NVIM_LISTEN_ADDRESS"] = nil
 
         -- Add default variables for ACP providers (overwrites parent if present)
         env_map["NODE_NO_WARNINGS"] = "1"

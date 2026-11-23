@@ -99,6 +99,35 @@ describe("ACPTransport process lifecycle", function()
             assert.is_true(died)
         end
     )
+
+    it(
+        "gives the agent this nvim's server as $NVIM, as jobstart does",
+        function()
+            local got = child.lua([[
+            local Transport = require("agentic.acp.acp_transport")
+            vim.env.NVIM_LISTEN_ADDRESS = "/stale/address"
+            _G.t = {}
+            _G.transport = Transport.create_stdio_transport({
+                command = "/bin/sh",
+                args = {
+                    "-c",
+                    'printf \'{"nvim":"%s","listen":"%s"}\\n\' "${NVIM-unset}" "${NVIM_LISTEN_ADDRESS-unset}"; exec cat >/dev/null',
+                },
+            }, {
+                on_state_change = function() end,
+                on_message = function(msg) _G.t.env = msg end,
+                on_reconnect = function() end,
+            })
+            _G.transport:start()
+            vim.wait(2000, function() return _G.t.env ~= nil end)
+            _G.transport:stop()
+            return { env = _G.t.env, servername = vim.v.servername }
+        ]])
+
+            assert.equal(got.env.nvim, got.servername)
+            assert.equal(got.env.listen, "unset")
+        end
+    )
 end)
 
 describe("ACPTransport.decode_line", function()
