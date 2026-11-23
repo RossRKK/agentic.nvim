@@ -28,6 +28,15 @@ end
 vim.opt.rtp:prepend(mini_path)
 vim.opt.rtp:prepend(vim.fn.getcwd())
 
+-- tests.* sit outside lua/; an inherited LUA_PATH without ";;" drops ./?.lua.
+local tests_path = vim.fn.getcwd()
+    .. "/?.lua;"
+    .. vim.fn.getcwd()
+    .. "/?/init.lua"
+package.path = tests_path .. ";" .. package.path
+-- Child nvims build their package.path from LUA_PATH.
+vim.env.LUA_PATH = tests_path .. ";;"
+
 local MiniTest = require("mini.test")
 
 MiniTest.setup({
