@@ -28,8 +28,7 @@
       copyMini = pkgs: "[ -e deps/mini.nvim ] || { mkdir -p deps && cp -r ${pkgs.vimPlugins.mini-nvim} deps/mini.nvim && chmod -R u+w deps; }";
     in
     {
-      # `nix develop -c make test NVIM=nvim`: NVIM, as the Makefile names its
-      # binary, is also the socket of an enclosing nvim; VIM/VIMRUNTIME it
+      # `nix develop -c make test`: the VIM/VIMRUNTIME an enclosing nvim
       # exports would point this nvim at that one's runtime.
       devShells = forEachSystem (
         pkgs: nvim: {
@@ -45,7 +44,7 @@
       checks = forEachSystem (
         pkgs: nvim: {
           test = pkgs.runCommand "agentic-tests" { nativeBuildInputs = packages pkgs nvim; }
-            "cp -r ${self} src && chmod -R u+w src && cd src && git init -q && ${copyMini pkgs} && HOME=$TMPDIR make test NVIM=nvim && touch $out";
+            "cp -r ${self} src && chmod -R u+w src && cd src && git init -q && ${copyMini pkgs} && HOME=$TMPDIR make test && touch $out";
         }
       );
     };

@@ -1,5 +1,8 @@
 # Default tools; override like: make NVIM=/opt/homebrew/bin/nvim
-NVIM     ?= nvim
+# An inherited $NVIM is an enclosing nvim's socket, not a binary.
+ifneq ($(origin NVIM),command line)
+NVIM     := nvim
+endif
 LUALS    ?= $(shell which lua-language-server 2>/dev/null || echo "$(HOME)/.local/share/nvim/mason/bin/lua-language-server")
 SELENE   ?= $(shell which selene 2>/dev/null || echo "$(HOME)/.local/share/nvim/mason/bin/selene")
 STYLUA   ?= $(shell which stylua 2>/dev/null || echo "$(HOME)/.local/share/nvim/mason/bin/stylua")
