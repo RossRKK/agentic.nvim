@@ -1,18 +1,22 @@
 {
-  description = "agentic.nvim's test suite, with its nvim and mini.nvim from nixpkgs";
+  description = "agentic.nvim's test suite, with nightly nvim and mini.nvim, rg, fd and git from nixpkgs";
 
-  inputs.nixpkgs.url = "github:nixos/nixpkgs/nixos-26.05";
+  inputs = {
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-26.05";
+    # The plugin needs nvim 0.13, which is only a nightly until it is released.
+    neovim-nightly.url = "github:nix-community/neovim-nightly-overlay";
+  };
 
   outputs =
-    { self, nixpkgs }:
+    { self, nixpkgs, neovim-nightly }:
     let
       forEachSystem =
         f:
         nixpkgs.lib.genAttrs [ "x86_64-linux" "aarch64-darwin" ] (
-          system: f nixpkgs.legacyPackages.${system}
+          system: f nixpkgs.legacyPackages.${system} neovim-nightly.packages.${system}.default
         );
-      packages = pkgs: [
-        pkgs.neovim-unwrapped
+      packages = pkgs: nvim: [
+        nvim
         pkgs.gnumake
         # The file picker's tests run its real listing commands, as upstream's CI installs them.
         pkgs.ripgrep
@@ -27,18 +31,22 @@
       # `nix develop -c make test NVIM=nvim`: NVIM, as the Makefile names its
       # binary, is also the socket of an enclosing nvim; VIM/VIMRUNTIME it
       # exports would point this nvim at that one's runtime.
-      devShells = forEachSystem (pkgs: {
-        default = pkgs.mkShell {
-          packages = packages pkgs;
-          shellHook = "unset VIM VIMRUNTIME; ${copyMini pkgs}";
-        };
-      });
+      devShells = forEachSystem (
+        pkgs: nvim: {
+          default = pkgs.mkShell {
+            packages = packages pkgs nvim;
+            shellHook = "unset VIM VIMRUNTIME; ${copyMini pkgs}";
+          };
+        }
+      );
 
       # `nix flake check`, from a git checkout as `make test` runs in: rg only
       # honours .gitignore (deps/) inside one.
-      checks = forEachSystem (pkgs: {
-        test = pkgs.runCommand "agentic-tests" { nativeBuildInputs = packages pkgs; }
-          "cp -r ${self} src && chmod -R u+w src && cd src && git init -q && ${copyMini pkgs} && HOME=$TMPDIR make test NVIM=nvim && touch $out";
-      });
+      checks = forEachSystem (
+        pkgs: nvim: {
+          test = pkgs.runCommand "agentic-tests" { nativeBuildInputs = packages pkgs nvim; }
+            "cp -r ${self} src && chmod -R u+w src && cd src && git init -q && ${copyMini pkgs} && HOME=$TMPDIR make test NVIM=nvim && touch $out";
+        }
+      );
     };
 }
