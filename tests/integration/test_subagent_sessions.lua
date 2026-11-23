@@ -54,6 +54,9 @@ describe("Subagent sessions", function()
             -- As agent chats are configured: a sub-agent's calls are summarised on it.
             require("agentic.config").tool_calls.subagent_activity = "summary"
 
+            -- Wide enough that no footer row wraps, so each header reads back whole.
+            vim.o.columns = 300
+
             local registry = require("agentic.session_registry")
             _G.session = registry.create(nil, { kind = "new" })
             registry.show_session(_G.session.session_key)

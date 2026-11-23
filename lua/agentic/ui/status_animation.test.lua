@@ -309,6 +309,66 @@ describe("agentic.ui.StatusAnimation", function()
                 end
             )
 
+            local LONG_LINE = {
+                { " think(Explore) · sub-agent: ", "Comment" },
+                { "2 tool calls, last: execute(git status --short) ", "Title" },
+            }
+
+            --- @param row table Chunks of one virtual line
+            --- @return string text
+            local function row_text(row)
+                return table.concat(vim.tbl_map(function(chunk)
+                    return chunk[1]
+                end, row))
+            end
+
+            --- @return integer width Columns left of the window for text
+            local function text_width()
+                local info = vim.fn.getwininfo(winid)[1]
+                return info.width - info.textoff
+            end
+
+            it("wraps a footer line wider than the window", function()
+                vim.wo[winid].number = true
+
+                animation:set_footer({ LONG_LINE })
+
+                local lines = virt_lines()
+                assert.is_not_nil(lines)
+                ---@cast lines table[]
+                local rows = vim.list_slice(lines, 2)
+                assert.is_true(#rows > 1)
+                local words = {}
+                for i, row in ipairs(rows) do
+                    local text = row_text(row)
+                    assert.is_true(vim.fn.strdisplaywidth(text) <= text_width())
+                    if i > 1 then
+                        assert.equal("    ", row[1][1])
+                    end
+                    vim.list_extend(words, vim.split(vim.trim(text), "%s+"))
+                end
+                assert.equal(
+                    vim.split(vim.trim(row_text(LONG_LINE)), "%s+"),
+                    words
+                )
+                assert.equal(
+                    { " think(Explore) · sub-agent: ", "Comment" },
+                    rows[1][1]
+                )
+                assert.equal("Title", rows[#rows][#rows[#rows]][2])
+            end)
+
+            it("rewraps the footer when the window is resized", function()
+                animation:set_footer({ LONG_LINE })
+                assert.is_true(#virt_lines() > 2)
+
+                vim.api.nvim_win_set_config(winid, { width = 120 })
+                -- nvim fires WinResized from its main loop, which a test never returns to.
+                vim.api.nvim_exec_autocmds("WinResized", {})
+
+                assert.equal({ { { "" } }, LONG_LINE }, virt_lines())
+            end)
+
             it("leaves a window reading further up where it is", function()
                 vim.api.nvim_win_call(winid, function()
                     vim.cmd("normal! 20Gzt")
