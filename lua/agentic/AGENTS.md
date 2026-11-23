@@ -176,11 +176,8 @@ the regression test for each one.
   `lua/agentic/theme.lua`.
 - **FORBIDDEN: global keymaps, and direct `vim.keymap.set`/`vim.keymap.del` with
   `{ buffer = bufnr }`** -> use `BufHelpers.keymap_set` /
-  `BufHelpers.keymap_del`. They pick the right option name per version: `buffer`
-  was renamed to `buf` in `neovim#38360` (shipped in 0.12.0 final, `buffer`
-  removed in 0.15). The helpers gate on `nvim-0.12.1`, so 0.12.0-dev nightlies
-  built before the rename — which answer `has("nvim-0.12") == 1` but reject
-  `buf` — still work.
+  `BufHelpers.keymap_del`. They always scope the map to the buffer, and pass
+  `buf`: `buffer` was renamed to `buf` in `neovim#38360` and is removed in 0.15.
 - **FORBIDDEN: `vim.api.nvim_list_wins()` to enumerate a widget's windows** ->
   enumerate through the widget's own tabpage,
   `vim.api.nvim_tabpage_list_wins(self:get_visible_tab_id())`, returning early

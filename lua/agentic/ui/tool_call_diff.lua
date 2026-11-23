@@ -29,11 +29,9 @@ local TextMatcher = require("agentic.utils.text_matcher")
 local FileSystem = require("agentic.utils.file_system")
 local Logger = require("agentic.utils.logger")
 
--- vim.diff was renamed to vim.text.diff (identical signature, just namespace move)
--- Fallback needed for backward compatibility with Neovim < 0.12
+-- Typed for result_type = "indices", the only form used here
 --- @type fun(a: string, b: string, opts: table): integer[][]
---- @diagnostic disable-next-line: deprecated
-local diff_fn = vim.text and vim.text.diff or vim.diff
+local diff_fn = vim.text.diff
 
 --- @param lines string[]
 --- @return boolean is_empty

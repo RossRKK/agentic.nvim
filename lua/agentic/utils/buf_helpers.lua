@@ -119,21 +119,6 @@ function BufHelpers.execute_on_buffer(bufnr, callback)
     end)
 end
 
---- `buffer` was renamed to `buf` in neovim#38360 (0.12.0 final, `buffer` removed
---- in 0.15). Gated on 0.12.1 so 0.12.0-dev nightlies built before the rename —
---- which answer `has("nvim-0.12") == 1` but reject `buf` — still work.
---- @param opts table
---- @param bufnr integer
-local function set_buffer_opt(opts, bufnr)
-    --- @diagnostic disable: inject-field
-    if vim.fn.has("nvim-0.12.1") == 1 then
-        opts.buf = bufnr
-    else
-        opts.buffer = bufnr
-    end
-    --- @diagnostic enable: inject-field
-end
-
 --- Sets a keymap for a specific buffer.
 --- @param bufnr integer
 --- @param mode string|string[]
@@ -142,7 +127,7 @@ end
 --- @param opts vim.keymap.set.Opts|nil
 function BufHelpers.keymap_set(bufnr, mode, lhs, rhs, opts)
     opts = opts or {}
-    set_buffer_opt(opts, bufnr)
+    opts.buf = bufnr
     vim.keymap.set(mode, lhs, rhs, opts)
 end
 
@@ -151,10 +136,7 @@ end
 --- @param mode string|string[]
 --- @param lhs string
 function BufHelpers.keymap_del(bufnr, mode, lhs)
-    --- @type table
-    local opts = {}
-    set_buffer_opt(opts, bufnr)
-    pcall(vim.keymap.del, mode, lhs, opts)
+    pcall(vim.keymap.del, mode, lhs, { buf = bufnr })
 end
 
 --- Normalizes a KeymapValue (string, string[], or array of string/KeymapEntry)
@@ -193,36 +175,16 @@ function BufHelpers.multi_keymap_del(keymaps, bufnr)
     end)
 end
 
---- `nvim_win_set_width`/`_set_height` are deprecated for `nvim_win_resize`, which only exists on 0.13+.
---- @param winid integer
---- @param width integer -1 leaves the axis unchanged
---- @param height integer -1 leaves the axis unchanged
-local function resize_win(winid, width, height)
-    if vim.fn.has("nvim-0.13") == 1 then
-        vim.api.nvim_win_resize(winid, width, height, {})
-        return
-    end
-
-    --- @diagnostic disable: deprecated
-    if width >= 0 then
-        vim.api.nvim_win_set_width(winid, width)
-    end
-    if height >= 0 then
-        vim.api.nvim_win_set_height(winid, height)
-    end
-    --- @diagnostic enable: deprecated
-end
-
 --- @param winid integer
 --- @param width integer
 function BufHelpers.win_set_width(winid, width)
-    resize_win(winid, width, -1)
+    vim.api.nvim_win_resize(winid, width, -1, {})
 end
 
 --- @param winid integer
 --- @param height integer
 function BufHelpers.win_set_height(winid, height)
-    resize_win(winid, -1, height)
+    vim.api.nvim_win_resize(winid, -1, height, {})
 end
 
 --- @param bufnr integer

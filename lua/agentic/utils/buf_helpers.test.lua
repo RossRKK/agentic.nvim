@@ -114,109 +114,44 @@ describe("BufHelpers", function()
         )
     end)
 
-    describe("keymap_set", function()
-        --- @type TestStub
-        local keymap_set_stub
-        --- @type TestStub
-        local has_stub
+    describe("keymap_set / keymap_del", function()
+        --- @type integer
+        local bufnr
 
         before_each(function()
-            keymap_set_stub = spy.stub(vim.keymap, "set")
-            has_stub = spy.stub(vim.fn, "has")
+            bufnr = vim.api.nvim_create_buf(false, true)
         end)
 
         after_each(function()
-            keymap_set_stub:revert()
-            has_stub:revert()
-        end)
-
-        -- Regression: 0.12.0-dev nightlies built before neovim#38360 (`buffer`
-        -- -> `buf` rename) report `has('nvim-0.12') == 1` but reject `buf` with
-        -- `invalid key: buf`. Gate on 0.12.1, first stable shipping `buf`.
-        it("uses `buffer` opt on Neovim < 0.12.1", function()
-            has_stub:invokes(function(feature)
-                return feature == "nvim-0.12.1" and 0 or 1
-            end)
-            local bufnr = vim.api.nvim_create_buf(false, true)
-
-            BufHelpers.keymap_set(bufnr, "n", "x", function() end)
-
-            local opts = keymap_set_stub.calls[1][4]
-            assert.equal(bufnr, opts.buffer)
-            assert.is_nil(opts.buf)
-
             vim.api.nvim_buf_delete(bufnr, { force = true })
         end)
 
-        it("uses `buf` opt on Neovim >= 0.12.1", function()
-            has_stub:invokes(function(feature)
-                return feature == "nvim-0.12.1" and 1 or 0
-            end)
-            local bufnr = vim.api.nvim_create_buf(false, true)
+        --- @return string[]
+        local function buffer_lhs()
+            return vim.tbl_map(function(map)
+                return map.lhs
+            end, vim.api.nvim_buf_get_keymap(bufnr, "n"))
+        end
 
-            BufHelpers.keymap_set(bufnr, "n", "x", function() end)
+        it("maps the key in that buffer only", function()
+            BufHelpers.keymap_set(bufnr, "n", "<F13>", function() end)
 
-            local opts = keymap_set_stub.calls[1][4]
-            assert.equal(bufnr, opts.buf)
-            assert.is_nil(opts.buffer)
-
-            vim.api.nvim_buf_delete(bufnr, { force = true })
-        end)
-    end)
-
-    describe("keymap_del", function()
-        --- @type TestStub
-        local keymap_del_stub
-        --- @type TestStub
-        local has_stub
-
-        before_each(function()
-            keymap_del_stub = spy.stub(vim.keymap, "del")
-            has_stub = spy.stub(vim.fn, "has")
+            assert.same({ "<F13>" }, buffer_lhs())
+            assert.equal("", vim.fn.maparg("<F13>", "n"))
         end)
 
-        after_each(function()
-            keymap_del_stub:revert()
-            has_stub:revert()
-        end)
+        it("unmaps the key from that buffer", function()
+            BufHelpers.keymap_set(bufnr, "n", "<F13>", function() end)
 
-        -- 0.12.0-dev / 0.12.1 rename rationale: see keymap_set tests.
-        it("uses `buffer` opt on Neovim < 0.12.1", function()
-            has_stub:invokes(function(feature)
-                return feature == "nvim-0.12.1" and 0 or 1
-            end)
-            local bufnr = vim.api.nvim_create_buf(false, true)
+            BufHelpers.keymap_del(bufnr, "n", "<F13>")
 
-            BufHelpers.keymap_del(bufnr, "n", "x")
-
-            local opts = keymap_del_stub.calls[1][3]
-            assert.equal(bufnr, opts.buffer)
-            assert.is_nil(opts.buf)
-
-            vim.api.nvim_buf_delete(bufnr, { force = true })
-        end)
-
-        it("uses `buf` opt on Neovim >= 0.12.1", function()
-            has_stub:invokes(function(feature)
-                return feature == "nvim-0.12.1" and 1 or 0
-            end)
-            local bufnr = vim.api.nvim_create_buf(false, true)
-
-            BufHelpers.keymap_del(bufnr, "n", "x")
-
-            local opts = keymap_del_stub.calls[1][3]
-            assert.equal(bufnr, opts.buf)
-            assert.is_nil(opts.buffer)
-
-            vim.api.nvim_buf_delete(bufnr, { force = true })
+            assert.same({}, buffer_lhs())
         end)
     end)
 
     describe("multi_keymap_set", function()
         --- @type TestStub
         local keymap_set_stub
-        --- @type TestStub
-        local has_stub
         --- @type integer[]
         local created_bufnrs
 
@@ -231,13 +166,10 @@ describe("BufHelpers", function()
         before_each(function()
             created_bufnrs = {}
             keymap_set_stub = spy.stub(vim.keymap, "set")
-            has_stub = spy.stub(vim.fn, "has")
-            has_stub:returns(1)
         end)
 
         after_each(function()
             keymap_set_stub:revert()
-            has_stub:revert()
 
             for _, bufnr in ipairs(created_bufnrs) do
                 if vim.api.nvim_buf_is_valid(bufnr) then
@@ -292,18 +224,13 @@ describe("BufHelpers", function()
     describe("multi_keymap_del", function()
         --- @type TestStub
         local keymap_del_stub
-        --- @type TestStub
-        local has_stub
 
         before_each(function()
             keymap_del_stub = spy.stub(vim.keymap, "del")
-            has_stub = spy.stub(vim.fn, "has")
-            has_stub:returns(1)
         end)
 
         after_each(function()
             keymap_del_stub:revert()
-            has_stub:revert()
         end)
 
         it("deletes a single string keymap", function()
@@ -340,34 +267,8 @@ describe("BufHelpers", function()
         local winid
         --- @type table<integer, true>
         local base_tabs
-        --- @type TestStub[]
-        local stubs
-        --- `nvim_win_resize` is absent below 0.13 and `spy.stub` cannot restore an
-        --- absent field, so that one is swapped by hand and cleared here.
-        --- @type table<string, function|nil>
-        local swapped_api
-
-        --- Tracked so `after_each` reverts it even when an assertion throws.
-        --- @param target table
-        --- @param method string
-        --- @return TestStub
-        local function stub(target, method)
-            local s = spy.stub(target, method)
-            stubs[#stubs + 1] = s
-            return s
-        end
-
-        --- @param name string
-        --- @param fn function
-        local function swap_api(name, fn)
-            swapped_api[name] = vim.api[name]
-            --- @diagnostic disable-next-line: no-unknown, assign-type-mismatch
-            vim.api[name] = fn
-        end
 
         before_each(function()
-            stubs = {}
-            swapped_api = {}
             base_tabs = {}
             for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
                 base_tabs[tab] = true
@@ -378,15 +279,6 @@ describe("BufHelpers", function()
         end)
 
         after_each(function()
-            -- Reverted first: the cleanup below calls the very APIs these stub.
-            for _, s in ipairs(stubs) do
-                s:revert()
-            end
-            for name, original in pairs(swapped_api) do
-                --- @diagnostic disable-next-line: no-unknown, assign-type-mismatch
-                vim.api[name] = original
-            end
-
             close_extra_tabs(base_tabs)
         end)
 
@@ -410,44 +302,12 @@ describe("BufHelpers", function()
             assert.equal(original_height, vim.api.nvim_win_get_height(winid))
         end)
 
-        -- `nvim_win_set_width`/`_set_height` are deprecated on nightly for
-        -- `nvim_win_resize`, which only exists on 0.13+. CI runs a nightly
-        -- matrix job, so both branches stay reachable on every version.
-        it("calls nvim_win_resize on Neovim >= 0.13", function()
-            stub(vim.fn, "has"):invokes(function(feature)
-                return feature == "nvim-0.13" and 1 or 0
-            end)
+        it("leaves the width untouched when setting the height", function()
+            local original_width = vim.api.nvim_win_get_width(winid)
 
-            local calls = {}
-            swap_api("nvim_win_resize", function(win, width, height, opts)
-                calls[#calls + 1] = { win, width, height, opts }
-            end)
-
-            BufHelpers.win_set_width(winid, 20)
             BufHelpers.win_set_height(winid, 8)
 
-            assert.equal(2, #calls)
-            assert.equal(winid, calls[1][1])
-            assert.equal(20, calls[1][2])
-            assert.equal(-1, calls[1][3])
-            assert.equal(-1, calls[2][2])
-            assert.equal(8, calls[2][3])
-        end)
-
-        it("falls back to the single-axis setters on Neovim < 0.13", function()
-            stub(vim.fn, "has"):returns(0)
-            --- @diagnostic disable-next-line: deprecated
-            local set_width_stub = stub(vim.api, "nvim_win_set_width")
-            --- @diagnostic disable-next-line: deprecated
-            local set_height_stub = stub(vim.api, "nvim_win_set_height")
-
-            BufHelpers.win_set_width(winid, 20)
-
-            assert.equal(1, set_width_stub.call_count)
-            assert.equal(winid, set_width_stub.calls[1][1])
-            assert.equal(20, set_width_stub.calls[1][2])
-            -- Unset axis passes -1 and must not reach the setter.
-            assert.equal(0, set_height_stub.call_count)
+            assert.equal(original_width, vim.api.nvim_win_get_width(winid))
         end)
     end)
 
