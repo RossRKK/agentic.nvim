@@ -28,12 +28,17 @@
       copyMini = pkgs: "[ -e deps/mini.nvim ] || { mkdir -p deps && cp -r ${pkgs.vimPlugins.mini-nvim} deps/mini.nvim && chmod -R u+w deps; }";
     in
     {
-      # `nix develop -c make test`: the VIM/VIMRUNTIME an enclosing nvim
+      # `nix develop -c make validate`: the VIM/VIMRUNTIME an enclosing nvim
       # exports would point this nvim at that one's runtime.
       devShells = forEachSystem (
         pkgs: nvim: {
           default = pkgs.mkShell {
-            packages = packages pkgs nvim;
+            # `make validate` also formats, type-checks and lints.
+            packages = packages pkgs nvim ++ [
+              pkgs.stylua
+              pkgs.lua-language-server
+              pkgs.selene
+            ];
             shellHook = "unset VIM VIMRUNTIME; ${copyMini pkgs}";
           };
         }
