@@ -9,6 +9,8 @@ describe("Subagent sessions", function()
     --- and `session/new` with the recorded parent session.
     local function start_session()
         child.setup()
+        -- Wide enough that the chat pins a sub-agent's header whole, not cut to two rows.
+        child.o.columns = 240
         child.lua([[
             local fixture = require("tests.fixtures.subagent_sessions")
             local transport_module = require("agentic.acp.acp_transport")

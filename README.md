@@ -660,8 +660,8 @@ opts = {
 
 While a sub-agent runs, the same line is also pinned below the end of the chat,
 under the spinner, so it stays in view as output arrives. Each running sub-agent
-gets its own line, and it goes when the sub-agent's tool call completes or
-fails. The header keeps the summary.
+gets its own line, cut with `…` past two rows of the chat window, and it goes
+when the sub-agent's tool call completes or fails. The header keeps the summary.
 
 A sub-agent tool call that asks for permission still gets its own block, with
 the permission buttons, and keeps it after you answer. File edits made by a

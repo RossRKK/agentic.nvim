@@ -324,6 +324,56 @@ describe("agentic.ui.StatusAnimation", function()
                 assert.equal(4, rows)
             end)
 
+            --- @return string text The footer line's chunks joined, as drawn
+            local function drawn_footer_text()
+                local lines = virt_lines() or {}
+                local chunks = lines[#lines]
+                return table.concat(vim.tbl_map(function(chunk)
+                    return chunk[1]
+                end, chunks))
+            end
+
+            describe("with a number column", function()
+                -- 40 columns less the 4 of the number column leave 36 per row.
+                local TWO_ROWS = 72
+
+                before_each(function()
+                    vim.wo[winid][0].number = true
+                end)
+
+                it("cuts a footer line to two rows with an ellipsis", function()
+                    animation:set_footer({
+                        {
+                            { " SubAgent(Debug) · sub-agent: ", "Comment" },
+                            {
+                                "last: execute(" .. string.rep("x", 500) .. ")",
+                                "Title",
+                            },
+                        },
+                    })
+
+                    local text = drawn_footer_text()
+                    assert.equal(TWO_ROWS, vim.fn.strdisplaywidth(text))
+                    assert.equal(
+                        "…",
+                        vim.fn.strcharpart(text, vim.fn.strchars(text) - 1)
+                    )
+                    local rows = vim.api.nvim_win_text_height(
+                        winid,
+                        { start_row = 29 }
+                    ).all
+                    -- The last line, then a blank and the footer line across two rows.
+                    assert.equal(4, rows)
+                end)
+
+                it("keeps a footer line that fills two rows whole", function()
+                    local whole = string.rep("y", TWO_ROWS)
+                    animation:set_footer({ { { whole, "Title" } } })
+
+                    assert.equal(whole, drawn_footer_text())
+                end)
+            end)
+
             it(
                 "scrolls a following window when a footer line wraps onto another row",
                 function()

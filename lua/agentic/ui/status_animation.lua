@@ -12,6 +12,10 @@ local TIMING = {
     busy = 100,
 }
 
+-- A pinned footer line past this many rows buries the chat it sits below.
+local FOOTER_MAX_ROWS = 2
+local ELLIPSIS = "…"
+
 --- @alias agentic.ui.StatusAnimation.VirtLine [string, string][] Text and highlight group chunks
 
 --- Spinner and footer, kept as virtual lines below the chat buffer's last line.
@@ -132,7 +136,7 @@ function StatusAnimation:_draw()
     if self._state then
         body = { self:_build_spinner_line(), { { "" } } }
     end
-    vim.list_extend(body, self._footer)
+    vim.list_extend(body, self:_fit_footer())
 
     if #body == 0 then
         if self._extmark_id then
@@ -199,6 +203,66 @@ end
 --- @return integer rows Screen rows from the buffer's last line down, its virtual lines included
 function StatusAnimation:_count_end_rows(winid, line_count)
     return vim.api.nvim_win_text_height(winid, { start_row = line_count - 1 }).all
+end
+
+--- Each footer line cut to FOOTER_MAX_ROWS rows of the window showing the chat; with none, left whole.
+--- Regression: status_animation.test.lua::"cuts a footer line to two rows with an ellipsis"
+--- @return agentic.ui.StatusAnimation.VirtLine[] footer
+function StatusAnimation:_fit_footer()
+    local winid = BufHelpers.find_visible_win(self._bufnr)
+    if not winid then
+        return self._footer
+    end
+
+    local info = vim.fn.getwininfo(winid)[1]
+    local max_width = FOOTER_MAX_ROWS * (info.width - info.textoff)
+    return vim.tbl_map(function(line)
+        return self:_cut_line(line, max_width)
+    end, self._footer)
+end
+
+--- @param line agentic.ui.StatusAnimation.VirtLine
+--- @param max_width integer Display cells the line may take, its ellipsis included
+--- @return agentic.ui.StatusAnimation.VirtLine cut
+function StatusAnimation:_cut_line(line, max_width)
+    local texts = vim.tbl_map(function(chunk)
+        return chunk[1]
+    end, line)
+    if vim.fn.strdisplaywidth(table.concat(texts)) <= max_width then
+        return line
+    end
+
+    --- @type agentic.ui.StatusAnimation.VirtLine
+    local cut = {}
+    local room = max_width - vim.fn.strdisplaywidth(ELLIPSIS)
+    for _, chunk in ipairs(line) do
+        local width = vim.fn.strdisplaywidth(chunk[1])
+        if width > room then
+            cut[#cut + 1] =
+                { self:_cut_text(chunk[1], room) .. ELLIPSIS, chunk[2] }
+            return cut
+        end
+        cut[#cut + 1] = chunk
+        room = room - width
+    end
+    return cut
+end
+
+--- @param text string
+--- @param room integer Display cells the kept text may take
+--- @return string kept
+function StatusAnimation:_cut_text(text, room)
+    --- @type string[]
+    local kept = {}
+    local width = 0
+    for _, char in ipairs(vim.fn.split(text, "\\zs")) do
+        width = width + vim.fn.strdisplaywidth(char)
+        if width > room then
+            break
+        end
+        kept[#kept + 1] = char
+    end
+    return table.concat(kept)
 end
 
 --- @return agentic.ui.StatusAnimation.VirtLine spinner_line
