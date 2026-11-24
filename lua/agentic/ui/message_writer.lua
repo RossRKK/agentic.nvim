@@ -729,7 +729,7 @@ end
 --- @return string text
 function MessageWriter:_build_subagent_summary(summary, max_length)
     local noun = summary.tool_call_count == 1 and "tool call" or "tool calls"
-    local argument = (summary.latest_argument or ""):gsub("\n", "\\n")
+    local argument = self:_flatten_lines(summary.latest_argument or "")
 
     if max_length > 0 and vim.fn.strchars(argument) > max_length then
         argument = vim.fn.strcharpart(argument, 0, max_length) .. "..."
@@ -794,21 +794,27 @@ end
 --- @param max_length integer Characters the argument is cut to; 0 cuts nothing
 --- @return string argument
 function MessageWriter:_build_header_argument(tool_call_block, max_length)
-    local argument = tool_call_block.argument or ""
-
-    -- Sanitize argument to prevent newlines in the header line
-    -- nvim_buf_set_lines doesn't accept array items with embedded newlines
-    argument = argument:gsub("\n", "\\n")
+    local argument = self:_flatten_lines(tool_call_block.argument or "")
 
     if
         max_length > 0
-        and #argument > max_length
+        and vim.fn.strchars(argument) > max_length
         and self:_should_render_full_title_body(tool_call_block)
     then
-        return argument:sub(1, max_length) .. "..."
+        -- By characters, as ⏎ is several bytes a byte cut could split.
+        return vim.fn.strcharpart(argument, 0, max_length) .. "..."
     end
 
     return argument
+end
+
+--- nvim_buf_set_lines takes no embedded newline, so each break and the blanks around it read as one ⏎.
+--- Regression: message_writer.test.lua::"marks each line break of the latest call with one ⏎"
+--- @param text string
+--- @return string flattened
+function MessageWriter:_flatten_lines(text)
+    local flattened = text:gsub("%s*\n%s*", " ⏎ ")
+    return flattened
 end
 
 --- @return integer max_length

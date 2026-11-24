@@ -1686,7 +1686,22 @@ describe("agentic.ui.MessageWriter", function()
             }))
 
             assert.is_true(
-                content_has("last: execute%(for f in %*%.lua\\ndo e%.%.%.%) $")
+                content_has("last: execute%(for f in %*%.lua ⏎ do %.%.%.%) $")
+            )
+        end)
+
+        it("marks each line break of the latest call with one ⏎", function()
+            writer:write_tool_call_block(make_agent_block({
+                tool_call_count = 3,
+                latest_kind = "execute",
+                latest_argument = "cat <<'EOF'\n  // one\n\n// two\nEOF",
+            }))
+
+            local headers = writer:list_headers({ "toolu_agent" })
+
+            assert.equal(
+                " think(Explore the repo) · sub-agent: 3 tool calls, last: execute(cat <<'EOF' ⏎ // one ⏎ // two ⏎ EOF) ",
+                headers[1][1][1]
             )
         end)
 
