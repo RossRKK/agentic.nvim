@@ -1,6 +1,6 @@
-local Logger = require("agentic.utils.logger")
 local Config = require("agentic.config")
 local AgentInstance = require("agentic.acp.agent_instance")
+local SessionPicker = require("agentic.session_picker")
 local SessionRegistry = require("agentic.session_registry")
 
 --- @class agentic.SessionRestoreContext
@@ -33,73 +33,21 @@ local function resolve_context()
     }
 end
 
---- @param operation string
---- @return fun(err: agentic.acp.ACPError) callback
-local function notify_readiness_failure(operation)
-    return function(err)
-        Logger.notify(
-            "Failed to "
-                .. operation
-                .. ": "
-                .. (err.message or "provider unavailable"),
-            vim.log.levels.WARN
-        )
-    end
-end
-
---- @param item { display: string, session_id: string }
---- @param supports_chunks boolean|nil
---- @return string label
-local function format_picker_item(item, supports_chunks)
-    return supports_chunks and item.display
-        or item.display .. " " .. item.session_id
-end
-
 --- @param context agentic.SessionRestoreContext
 --- @param session_id string
 --- @param title string|nil
 --- @param timestamp string|integer|nil
 local function restore(context, session_id, title, timestamp)
-    --- @type agentic.SessionStartSpec
-    local start_spec = {
-        kind = "load",
-        session_id = session_id,
-        title = title,
-        timestamp = timestamp,
-    }
-
-    -- Only a fresh target issues `session/load`; an existing manager can be
-    -- shown without the provider advertising load support.
-    local existing =
-        SessionRegistry.find_by_acp_session_id(session_id, context.agent)
-    if not existing then
-        local capabilities = context.agent.agent_capabilities
-        if not capabilities or not capabilities.loadSession then
-            Logger.notify(
-                "Agent does not support loading sessions",
-                vim.log.levels.WARN
-            )
-            return
-        end
-    end
-
-    SessionRegistry.choose_session_lifecycle(
+    SessionRegistry.restore(
         context.source,
-        "Restore session:",
-        function(destroy_source)
-            --- @type agentic.SessionReplacementOpts
-            local opts = { agent = context.agent }
-            if context.source and not destroy_source then
-                opts.retain_source = true
-            end
-
-            SessionRegistry.replace(
-                context.source,
-                context.provider_name,
-                start_spec,
-                opts
-            )
-        end
+        context.agent,
+        context.provider_name,
+        {
+            kind = "load",
+            session_id = session_id,
+            title = title,
+            timestamp = timestamp,
+        }
     )
 end
 
@@ -109,62 +57,9 @@ function SessionRestore.show_picker()
         return
     end
 
-    local cwd = vim.fn.getcwd()
-    context.agent:when_ready(function()
-        context.agent:list_sessions(cwd, function(result, err)
-            if err or not result then
-                Logger.notify(
-                    "Failed to list sessions: "
-                        .. (err and err.message or "unknown error"),
-                    vim.log.levels.WARN
-                )
-                return
-            end
-
-            if #result.sessions == 0 then
-                Logger.notify("No saved sessions found", vim.log.levels.INFO)
-                return
-            end
-
-            local items = {}
-            for _, session in ipairs(result.sessions) do
-                local date = session.updatedAt
-                        and session.updatedAt:sub(1, 16):gsub("T", " ")
-                    or "unknown date"
-                local title = (session.title or "(no title)")
-                    :gsub("\r\n", " ")
-                    :gsub("[\r\n]", " ")
-                    :sub(1, 80)
-                items[#items + 1] = {
-                    display = string.format(
-                        "%s - %s - %s",
-                        date,
-                        session.sessionId:sub(1, 8),
-                        title
-                    ),
-                    session_id = session.sessionId,
-                    title = session.title,
-                    updated_at = session.updatedAt,
-                }
-            end
-
-            vim.schedule(function()
-                vim.ui.select(items, {
-                    prompt = "Select session to restore:",
-                    format_item = format_picker_item,
-                }, function(choice)
-                    if choice then
-                        restore(
-                            context,
-                            choice.session_id,
-                            choice.title,
-                            choice.updated_at
-                        )
-                    end
-                end)
-            end)
-        end)
-    end, notify_readiness_failure("list sessions"))
+    SessionPicker.pick(context.agent, vim.fn.getcwd(), function(choice)
+        restore(context, choice.session_id, choice.title, choice.updated_at)
+    end)
 end
 
 --- @param session_id string
@@ -176,7 +71,7 @@ function SessionRestore.restore_by_id(session_id)
 
     context.agent:when_ready(function()
         restore(context, session_id, nil, nil)
-    end, notify_readiness_failure("restore session"))
+    end, SessionPicker.notify_readiness_failure("restore session"))
 end
 
 return SessionRestore

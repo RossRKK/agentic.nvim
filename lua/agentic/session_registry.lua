@@ -432,6 +432,42 @@ function SessionRegistry.choose_session_lifecycle(session, prompt, on_selected)
     end)
 end
 
+--- Restores a saved provider session after resolving the source's lifecycle.
+--- @param source agentic.SessionManager|nil
+--- @param agent agentic.acp.ACPClient
+--- @param provider_name agentic.UserConfig.ProviderName
+--- @param start_spec agentic.SessionStartSpec Of kind "load"
+function SessionRegistry.restore(source, agent, provider_name, start_spec)
+    -- Only a fresh target issues `session/load`; an existing manager can be
+    -- shown without the provider advertising load support.
+    local existing =
+        SessionRegistry.find_by_acp_session_id(start_spec.session_id, agent)
+    if not existing then
+        local capabilities = agent.agent_capabilities
+        if not capabilities or not capabilities.loadSession then
+            Logger.notify(
+                "Agent does not support loading sessions",
+                vim.log.levels.WARN
+            )
+            return
+        end
+    end
+
+    SessionRegistry.choose_session_lifecycle(
+        source,
+        "Restore session:",
+        function(destroy_source)
+            --- @type agentic.SessionReplacementOpts
+            local opts = { agent = agent }
+            if source and not destroy_source then
+                opts.retain_source = true
+            end
+
+            SessionRegistry.replace(source, provider_name, start_spec, opts)
+        end
+    )
+end
+
 --- Creates an additional session after resolving the current one's lifecycle.
 --- @param on_created fun(session: agentic.SessionManager)
 --- @param provider_name agentic.UserConfig.ProviderName|nil

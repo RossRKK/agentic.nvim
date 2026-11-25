@@ -77,10 +77,14 @@ startup attempt. `show_session` is the single path that moves a
 Three in-place re-render sites call `ChatWidget:show` directly. See ADR 0008.
 
 **SessionRestore**: Resolves the current manager and its injected **ACPClient**,
-or asks **AgentInstance** directly when no manager exists. It lists provider
-sessions, reuses the new-session lifecycle choice, and delegates target startup
-to **SessionRegistry**. Keeping the source evicts it into the background;
-destroying it remains an explicit choice.
+or asks **AgentInstance** directly when no manager exists, then hands the
+**SessionPicker** choice to `SessionRegistry.restore`. That reuses the
+new-session lifecycle choice and owns target startup. Keeping the source evicts
+it into the background; destroying it remains an explicit choice.
+
+**SessionPicker**: Lists an **ACPClient**'s saved sessions for a directory and
+asks which to restore. Depends only on the client, so the registry can offer it
+to each **SessionManager** without a cycle.
 
 ### Tabpage scope
 
