@@ -1481,6 +1481,74 @@ describe("agentic.ui.MessageWriter", function()
         )
     end)
 
+    describe("a tool call body's code fences", function()
+        --- @type TestStub
+        local schedule_stub
+
+        before_each(function()
+            schedule_stub = spy.stub(vim, "schedule")
+        end)
+
+        after_each(function()
+            schedule_stub:revert()
+        end)
+
+        --- Whether the buffer's markdown parse puts the line `text` inside a fenced code block.
+        --- @param text string
+        --- @return boolean inside
+        local function in_code_block(text)
+            local row = find_row(text)
+            if not row then
+                error("no line " .. text)
+            end
+            local parser = vim.treesitter.get_parser(bufnr, "markdown")
+            if not parser then
+                error("no markdown parser")
+            end
+            local node = parser
+                :parse()[1]
+                :root()
+                :named_descendant_for_range(row, 0, row, 0)
+            while node do
+                if node:type() == "fenced_code_block" then
+                    return true
+                end
+                node = node:parent()
+            end
+            return false
+        end
+
+        it("ends inside the block when the output opens one", function()
+            writer:write_tool_call_block({
+                tool_call_id = "half-a-doc",
+                status = "completed",
+                kind = "execute",
+                argument = "sed -n 35,70p doc.md",
+                body = { "Intro.", "```lua", "local x = 1" },
+            })
+            writer:write_message_chunk(make_update("The reply after it."))
+
+            assert.is_true(in_code_block("local x = 1"))
+            assert.is_false(in_code_block("The reply after it."))
+        end)
+
+        it("leaves output whose fences close as it was", function()
+            local body = { "```lua", "local x = 1", "```" }
+            writer:write_tool_call_block({
+                tool_call_id = "whole-doc",
+                status = "completed",
+                kind = "execute",
+                argument = "cat doc.md",
+                body = body,
+            })
+
+            local content = get_all_content()
+            assert.truthy(
+                content:find(table.concat(body, "\n") .. "\n\n", 1, true)
+            )
+        end)
+    end)
+
     describe("tool call title truncation", function()
         before_each(function()
             Config.tool_calls = {

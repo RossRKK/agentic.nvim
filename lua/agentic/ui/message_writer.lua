@@ -1046,6 +1046,11 @@ function MessageWriter:_prepare_block_lines(tool_call_block)
             local body_start_index = #lines
             vim.list_extend(lines, tool_call_block.body)
             add_body_comment_ranges(body_start_index, tool_call_block.body)
+            -- Output cut mid-way through a markdown file leaves a fence open, which would swallow the chat after it.
+            local closing_fence = self:_unclosed_fence(tool_call_block.body)
+            if closing_fence then
+                lines[#lines + 1] = closing_fence
+            end
         end
     end
 
@@ -1053,6 +1058,38 @@ function MessageWriter:_prepare_block_lines(tool_call_block)
     table.insert(lines, "")
 
     return lines, highlight_ranges
+end
+
+--- The fence that closes the code block `body` leaves open, by CommonMark's
+--- rules: up to three spaces of indent, three or more of one character, a
+--- backtick fence's info string free of backticks, and a close at least as long.
+--- @param body string[]
+--- @return string|nil closing_fence nil when every block `body` opens is closed
+function MessageWriter:_unclosed_fence(body)
+    --- @type string|nil
+    local open
+    for _, line in ipairs(body) do
+        local run, rest = line:match("^ ? ? ?(```+)(.*)$")
+        if not run then
+            run, rest = line:match("^ ? ? ?(~~~+)(.*)$")
+        end
+        if run and not open then
+            local info_has_backtick = run:sub(1, 1) == "`"
+                and rest:find("`", 1, true) ~= nil
+            if not info_has_backtick then
+                open = run
+            end
+        elseif
+            run
+            and open
+            and run:sub(1, 1) == open:sub(1, 1)
+            and #run >= #open
+            and rest:match("^%s*$")
+        then
+            open = nil
+        end
+    end
+    return open
 end
 
 --- Set or clear the permission state for a tool call block.
