@@ -308,6 +308,31 @@ describe("agentic.SessionRegistry", function()
             assert.equal(second, SessionRegistry.sessions[2])
         end)
 
+        it("offers each session a /resume that picks with its agent", function()
+            local on_resume_session
+            session_manager_mock.new = function(
+                _self,
+                _agent,
+                _name,
+                _new,
+                resume
+            )
+                on_resume_session = resume
+                return create_mock_session()
+            end
+            local SessionPicker = require("agentic.session_picker")
+            local pick_stub = spy.stub(SessionPicker, "pick")
+            local agent = { name = "picker-agent" }
+            local current = { agent = agent, provider_name = "claude-acp" }
+
+            SessionRegistry.create()
+            on_resume_session(current, nil)
+
+            assert.spy(pick_stub).was.called(1)
+            assert.equal(agent, pick_stub.calls[1][1])
+            pick_stub:revert()
+        end)
+
         it("is additive: both sessions remain listed", function()
             SessionRegistry.create()
             SessionRegistry.create()

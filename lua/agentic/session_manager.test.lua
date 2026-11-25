@@ -12,7 +12,12 @@ local function new_test_manager()
     local Config = require("agentic.config")
     local AgentInstance = require("agentic.acp.agent_instance")
     local agent = AgentInstance.get_instance(Config.provider)
-    return SessionManager:new(agent, Config.provider, function() end)
+    return SessionManager:new(
+        agent,
+        Config.provider,
+        function() end,
+        function() end
+    )
 end
 
 --- @param manager agentic.SessionManager
@@ -2973,12 +2978,13 @@ describe("agentic.SessionManager one-shot lifecycle", function()
         return agent
     end
 
-    local function make_manager(agent, on_new_session)
+    local function make_manager(agent, on_new_session, on_resume_session)
         get_instance_stub:returns(agent)
         local manager = SessionManager:new(
             agent,
             "claude-acp",
-            on_new_session or function() end
+            on_new_session or function() end,
+            on_resume_session or function() end
         )
         managers[#managers + 1] = manager
         return manager
@@ -3310,6 +3316,44 @@ describe("agentic.SessionManager one-shot lifecycle", function()
         assert.spy(on_new_session).was.called_with(manager)
         assert.spy(replace_stub).was.called(0)
         replace_stub:revert()
+    end)
+
+    it("delegates slash-resume without an id to ask for one", function()
+        local on_resume_session = spy.new(function() end)
+        local manager = make_manager(new_agent(), nil, on_resume_session)
+
+        assert.is_true(manager:_handle_input_submit("/resume"))
+
+        assert.spy(on_resume_session).was.called_with(manager, nil)
+    end)
+
+    it("delegates slash-resume with the id that follows it", function()
+        local on_resume_session = spy.new(function() end)
+        local manager = make_manager(new_agent(), nil, on_resume_session)
+
+        assert.is_true(manager:_handle_input_submit("/resume  abc-123 "))
+
+        assert.spy(on_resume_session).was.called_with(manager, "abc-123")
+    end)
+
+    it("delegates slash-resume while a reply is generating", function()
+        local on_resume_session = spy.new(function() end)
+        local manager = make_manager(new_agent(), nil, on_resume_session)
+        manager.is_generating = true
+
+        assert.is_true(manager:_handle_input_submit("/resume"))
+
+        assert.spy(on_resume_session).was.called(1)
+    end)
+
+    it("does not take a longer command for slash-resume", function()
+        local on_resume_session = spy.new(function() end)
+        local manager = make_manager(new_agent(), nil, on_resume_session)
+        manager.is_generating = true
+
+        manager:_handle_input_submit("/resumes")
+
+        assert.spy(on_resume_session).was.called(0)
     end)
 
     it("does not own startup orchestration", function()

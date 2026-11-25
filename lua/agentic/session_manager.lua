@@ -41,6 +41,7 @@ local Hooks = require("agentic.utils.hooks")
 --- @field _session_creation_failed boolean
 --- @field _start_prepared boolean
 --- @field _on_new_session fun(session: agentic.SessionManager)
+--- @field _on_resume_session fun(session: agentic.SessionManager, acp_session_id: string|nil) nil asks which saved session
 --- @field _session_ready_callbacks fun(succeeded: boolean)[]
 --- @field pending_replacement_sources? table<any, boolean>
 local SessionManager = {}
@@ -102,7 +103,13 @@ end
 --- @param agent agentic.acp.ACPClient
 --- @param provider_name agentic.UserConfig.ProviderName
 --- @param on_new_session fun(session: agentic.SessionManager)
-function SessionManager:new(agent, provider_name, on_new_session)
+--- @param on_resume_session fun(session: agentic.SessionManager, acp_session_id: string|nil)
+function SessionManager:new(
+    agent,
+    provider_name,
+    on_new_session,
+    on_resume_session
+)
     local ChatWidget = require("agentic.ui.chat_widget")
     local CodeSelection = require("agentic.ui.code_selection")
     local FileList = require("agentic.ui.file_list")
@@ -124,6 +131,7 @@ function SessionManager:new(agent, provider_name, on_new_session)
         _session_creation_failed = false,
         _start_prepared = false,
         _on_new_session = on_new_session,
+        _on_resume_session = on_resume_session,
         history_to_send = nil,
         _session_ready_callbacks = {},
     }, self)
@@ -714,9 +722,14 @@ end
 --- @param input_text string
 --- @return boolean submitted
 function SessionManager:_handle_input_submit(input_text)
-    -- BEFORE the submit guard, so `/new` escapes a stuck session.
+    -- BEFORE the submit guard, so `/new` and `/resume` escape a stuck session.
     if input_text:match("^/new%s") or input_text:match("^/new$") then
         self._on_new_session(self)
+        return true
+    end
+
+    if input_text:match("^/resume%s") or input_text:match("^/resume$") then
+        self._on_resume_session(self, input_text:match("^/resume%s+(%S+)"))
         return true
     end
 

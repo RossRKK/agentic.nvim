@@ -13,17 +13,39 @@ local Config = require("agentic.config")
 --- @class agentic.acp.SlashCommands
 local SlashCommands = {}
 
+--- Handled by the client, so offered whether or not the agent lists them.
+local CLIENT_COMMANDS = {
+    { name = "new", description = "Start a new session" },
+    {
+        name = "resume",
+        description = "Restore a saved session, or the one whose id follows",
+    },
+}
+
+--- @param name string
+--- @param description string
+--- @return agentic.acp.CompletionItem
+local function completion_item(name, description)
+    return {
+        word = name,
+        menu = description,
+        info = description,
+        kind = "/",
+        icase = 1,
+    }
+end
+
 --- Replace all commands with new list in completion format
 --- Validates each command has required fields, skips invalid commands and commands with spaces
 --- Filters out `clear` command (handled by specific agents internally)
---- Automatically adds `/new` command if not provided by agent
+--- Adds the client's own commands the agent does not provide
 --- @param bufnr integer
 --- @param available_commands agentic.acp.AvailableCommand[]
 function SlashCommands.setCommands(bufnr, available_commands)
     --- @type agentic.acp.CompletionItem[]
     local commands = {}
-
-    local has_new_command = false
+    --- @type table<string, true>
+    local provided = {}
 
     for _, cmd in ipairs(available_commands) do
         if
@@ -32,33 +54,15 @@ function SlashCommands.setCommands(bufnr, available_commands)
             and not cmd.name:match("%s")
             and cmd.name ~= "clear"
         then
-            if cmd.name == "new" then
-                has_new_command = true
-            end
-
-            --- @type agentic.acp.CompletionItem
-            local completion_item = {
-                word = cmd.name,
-                menu = cmd.description,
-                info = cmd.description,
-                kind = "/",
-                icase = 1,
-            }
-            table.insert(commands, completion_item)
+            provided[cmd.name] = true
+            table.insert(commands, completion_item(cmd.name, cmd.description))
         end
     end
 
-    -- Add /new command if not provided by agent
-    if not has_new_command then
-        --- @type agentic.acp.CompletionItem
-        local new_command = {
-            word = "new",
-            menu = "Start a new session",
-            info = "Start a new session",
-            kind = "/",
-            icase = 1,
-        }
-        table.insert(commands, new_command)
+    for _, cmd in ipairs(CLIENT_COMMANDS) do
+        if not provided[cmd.name] then
+            table.insert(commands, completion_item(cmd.name, cmd.description))
+        end
     end
 
     -- must be set at the end, as it gets serialized and loses the reference

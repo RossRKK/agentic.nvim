@@ -5,6 +5,7 @@ local ACPHealth = require("agentic.acp.acp_health")
 local AgentInstance = require("agentic.acp.agent_instance")
 local BufHelpers = require("agentic.utils.buf_helpers")
 local SessionManager = require("agentic.session_manager")
+local SessionPicker = require("agentic.session_picker")
 local SessionStarter = require("agentic.session_starter")
 
 local KEEP_CURRENT_SESSION = "Keep current session in the background"
@@ -51,6 +52,8 @@ end
 --- @type fun(source: agentic.SessionManager|nil, target: agentic.SessionManager, opts: agentic.SessionReplacementOpts, destroy_target_on_rollback: boolean): boolean
 local commit_replacement
 
+local start_new_from, resume_from
+
 --- @param provider_name agentic.UserConfig.ProviderName|nil Defaults to `Config.provider`
 --- @param start_spec agentic.SessionStartSpec|nil Defaults to a new session
 --- @param agent agentic.acp.ACPClient|nil
@@ -64,26 +67,12 @@ function SessionRegistry.create(provider_name, start_spec, agent)
     end
 
     local ok, session = pcall(function()
-        return SessionManager:new(agent, provider_name, function(current)
-            SessionRegistry.choose_session_lifecycle(
-                current,
-                "New session:",
-                function(destroy_source)
-                    --- @type agentic.SessionReplacementOpts
-                    local opts = { agent = current.agent }
-                    if not destroy_source then
-                        opts.retain_source = true
-                    end
-
-                    SessionRegistry.replace(
-                        current,
-                        current.provider_name,
-                        { kind = "new" },
-                        opts
-                    )
-                end
-            )
-        end)
+        return SessionManager:new(
+            agent,
+            provider_name,
+            start_new_from,
+            resume_from
+        )
     end)
 
     if not ok then
@@ -468,6 +457,36 @@ function SessionRegistry.restore(source, agent, provider_name, start_spec)
     )
 end
 
+--- Restores `acp_session_id`, or the saved session picked from the cwd's list.
+--- @param source agentic.SessionManager|nil
+--- @param agent agentic.acp.ACPClient
+--- @param provider_name agentic.UserConfig.ProviderName
+--- @param acp_session_id string|nil Asks which saved session when nil
+function SessionRegistry.resume(source, agent, provider_name, acp_session_id)
+    --- @param session_id string
+    --- @param title string|nil
+    --- @param timestamp string|nil
+    local function restore(session_id, title, timestamp)
+        SessionRegistry.restore(source, agent, provider_name, {
+            kind = "load",
+            session_id = session_id,
+            title = title,
+            timestamp = timestamp,
+        })
+    end
+
+    if not acp_session_id then
+        SessionPicker.pick(agent, vim.fn.getcwd(), function(choice)
+            restore(choice.session_id, choice.title, choice.updated_at)
+        end)
+        return
+    end
+
+    agent:when_ready(function()
+        restore(acp_session_id, nil, nil)
+    end, SessionPicker.notify_readiness_failure("restore session"))
+end
+
 --- Creates an additional session after resolving the current one's lifecycle.
 --- @param on_created fun(session: agentic.SessionManager)
 --- @param provider_name agentic.UserConfig.ProviderName|nil
@@ -709,6 +728,41 @@ function SessionRegistry.select_provider(on_selected)
     }, function(selected_provider)
         on_selected(selected_provider and selected_provider.name)
     end)
+end
+
+--- `/new` typed in `current`'s prompt.
+--- @param current agentic.SessionManager
+function start_new_from(current)
+    SessionRegistry.choose_session_lifecycle(
+        current,
+        "New session:",
+        function(destroy_source)
+            --- @type agentic.SessionReplacementOpts
+            local opts = { agent = current.agent }
+            if not destroy_source then
+                opts.retain_source = true
+            end
+
+            SessionRegistry.replace(
+                current,
+                current.provider_name,
+                { kind = "new" },
+                opts
+            )
+        end
+    )
+end
+
+--- `/resume [id]` typed in `current`'s prompt.
+--- @param current agentic.SessionManager
+--- @param acp_session_id string|nil
+function resume_from(current, acp_session_id)
+    SessionRegistry.resume(
+        current,
+        current.agent,
+        current.provider_name,
+        acp_session_id
+    )
 end
 
 return SessionRegistry

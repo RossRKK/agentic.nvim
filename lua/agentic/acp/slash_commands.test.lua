@@ -23,7 +23,7 @@ describe("agentic.acp.SlashCommands", function()
 
     describe("setCommands", function()
         it(
-            "sets commands from ACP provider and automatically adds /new",
+            "sets commands from ACP provider and automatically adds /new and /resume",
             function()
                 --- @type agentic.acp.AvailableCommand[]
                 local commands_mock = {
@@ -35,8 +35,7 @@ describe("agentic.acp.SlashCommands", function()
 
                 local commands = States.getSlashCommands()
 
-                -- Verify total count includes /new
-                assert.equal(3, #commands)
+                assert.equal(4, #commands)
 
                 -- Verify provided commands are set correctly
                 assert.equal("plan", commands[1].word)
@@ -46,10 +45,10 @@ describe("agentic.acp.SlashCommands", function()
                 assert.equal("Review code", commands[2].menu)
                 assert.equal("Review code", commands[2].info)
 
-                -- Verify /new was automatically added at the end
                 assert.equal("new", commands[3].word)
                 assert.equal("Start a new session", commands[3].menu)
                 assert.equal("Start a new session", commands[3].info)
+                assert.equal("resume", commands[4].word)
             end
         )
 
@@ -64,7 +63,7 @@ describe("agentic.acp.SlashCommands", function()
 
             local commands = States.getSlashCommands()
 
-            assert.equal(2, #commands)
+            assert.equal(3, #commands) -- new + plan + /resume
 
             local new_count = 0
             for _, cmd in ipairs(commands) do
@@ -75,6 +74,22 @@ describe("agentic.acp.SlashCommands", function()
                 end
             end
             assert.equal(1, new_count)
+        end)
+
+        it("keeps the agent's /resume over the client's", function()
+            --- @type agentic.acp.AvailableCommand[]
+            local commands_mock = {
+                { name = "resume", description = "Agent resume" },
+            }
+
+            SlashCommands.setCommands(bufnr, commands_mock)
+
+            local commands = States.getSlashCommands()
+
+            assert.equal(2, #commands) -- resume + /new
+            assert.equal("resume", commands[1].word)
+            assert.equal("Agent resume", commands[1].menu)
+            assert.equal("new", commands[2].word)
         end)
 
         it("filters out commands with spaces in name", function()
@@ -88,7 +103,7 @@ describe("agentic.acp.SlashCommands", function()
 
             local commands = States.getSlashCommands()
 
-            assert.equal(2, #commands) -- valid + /new
+            assert.equal(3, #commands) -- valid + /new + /resume
             for _, cmd in ipairs(commands) do
                 assert.is_false(cmd.word:match("%s") ~= nil)
             end
@@ -104,7 +119,7 @@ describe("agentic.acp.SlashCommands", function()
             SlashCommands.setCommands(bufnr, commands_mock)
             local commands = States.getSlashCommands()
 
-            assert.equal(2, #commands) -- plan + /new
+            assert.equal(3, #commands) -- plan + /new + /resume
             for _, cmd in ipairs(commands) do
                 assert.is_not.equal("clear", cmd.word)
             end
@@ -122,7 +137,7 @@ describe("agentic.acp.SlashCommands", function()
             SlashCommands.setCommands(bufnr, commands_mock)
             local commands = States.getSlashCommands()
 
-            assert.equal(2, #commands) -- valid + /new
+            assert.equal(3, #commands) -- valid + /new + /resume
         end)
 
         it("sets case-insensitive completion", function()
@@ -379,8 +394,8 @@ describe("agentic.acp.SlashCommands", function()
             vim.api.nvim_set_current_buf(bufnr2)
             local commands_buf2 = States.getSlashCommands()
 
-            assert.equal(2, #commands_buf1) -- plan + /new
-            assert.equal(2, #commands_buf2) -- review + /new
+            assert.equal(3, #commands_buf1) -- plan + /new + /resume
+            assert.equal(3, #commands_buf2) -- review + /new + /resume
             assert.equal("plan", commands_buf1[1].word)
             assert.equal("review", commands_buf2[1].word)
 

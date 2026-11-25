@@ -984,7 +984,9 @@ auto-completion.
 
 The `/new` command is always available to start a new session. With a current
 session present, it asks whether to keep that session running in the background
-or destroy it. Other commands are provided by your ACP provider.
+or destroy it. `/resume` opens the saved-session picker that
+`restore_session()` shows, and `/resume <session_id>` restores that session
+directly. Other commands are provided by your ACP provider.
 
 Sending `/clear` empties the chat once the provider has cleared its context, so
 the chat shows only what the agent still remembers.

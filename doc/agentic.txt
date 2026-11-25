@@ -823,10 +823,12 @@ FEATURES                                              *agentic-features*
 Slash commands ~
                                                 *agentic-slash-commands*
 Type `/` in the prompt buffer to see available slash commands with
-auto-completion. The `/new` command is always available. Other
-commands are provided by your ACP provider. When a current session
+auto-completion. The `/new` and `/resume` commands are always available.
+Other commands are provided by your ACP provider. When a current session
 exists, `/new` asks whether to keep it running in the background or
-destroy it.
+destroy it. `/resume` restores a saved session the same way
+|agentic.restore_session()| does; `/resume {session_id}` restores that
+one directly.
 Sending `/clear` empties the chat once the provider has cleared its
 context, so the chat shows only what the agent still remembers.
 
@@ -866,8 +868,8 @@ Then press `<localleader>p` in the Prompt buffer to paste the image.
 Session restoration ~
                                             *agentic-session-restore*
 Sessions are interchangeable between Neovim and the terminal. Call
-|agentic.restore_session()| to see previous sessions from your
-provider.
+|agentic.restore_session()|, or send `/resume`, to see previous sessions
+from your provider.
 
 When a current session exists, restoration asks whether to keep it
 running in the background or destroy it. The current chat stays visible
