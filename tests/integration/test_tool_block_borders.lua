@@ -102,7 +102,8 @@ describe("Tool block borders", function()
         local end_row = pos[3].end_row
         ---@cast end_row integer
         local top_pad_row = start_row + 1
-        local body_row = start_row + 2
+        -- Below the top pad and the opening fence around execute output.
+        local body_row = start_row + 3
         local footer_row = end_row
 
         vim.api.nvim_set_current_win(chat_winid)

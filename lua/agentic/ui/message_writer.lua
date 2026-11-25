@@ -22,7 +22,11 @@ local PERMISSION_OPTION_LABELS = {
     reject_always = "Reject Always",
 }
 
-local TITLE_FENCE = "`````"
+-- The shortest fence written: longer than the ``` a reply's own code blocks use.
+local MIN_FENCE_LENGTH = 5
+
+-- Kinds whose body is an agent's own reply, markdown meant to render; every other body is literal output.
+local MARKDOWN_BODY_KINDS = { think = true, SubAgent = true }
 
 --- @class agentic.ui.MessageWriter.HighlightRange
 --- @field type "comment"|"old"|"new"|"new_modification" Type of highlight to apply
@@ -875,12 +879,11 @@ end
 --- @return string[] lines
 function MessageWriter:_build_full_title_body_lines(tool_call_block)
     local lang = tool_call_block.kind == "execute" and "bash" or "text"
-    local lines = { TITLE_FENCE .. lang }
-    vim.list_extend(
-        lines,
-        self:_split_title_lines(tool_call_block.argument or "")
-    )
-    table.insert(lines, TITLE_FENCE)
+    local title_lines = self:_split_title_lines(tool_call_block.argument or "")
+    local fence = self:_fence_for(title_lines)
+    local lines = { fence .. lang }
+    vim.list_extend(lines, title_lines)
+    lines[#lines + 1] = fence
 
     return lines
 end
@@ -960,7 +963,12 @@ function MessageWriter:_prepare_block_lines(tool_call_block)
         })
 
         local lang = Theme.get_language_from_path(diff_path)
-        table.insert(lines, "`````" .. lang)
+        local diff_text = vim.list_extend(
+            vim.list_extend({}, tool_call_block.diff.old),
+            tool_call_block.diff.new
+        )
+        local fence = self:_fence_for(diff_text)
+        table.insert(lines, fence .. lang)
 
         for _, block in ipairs(diff_blocks) do
             local old_count = #block.old_lines
@@ -1039,17 +1047,22 @@ function MessageWriter:_prepare_block_lines(tool_call_block)
             end
         end
 
-        table.insert(lines, "`````")
+        table.insert(lines, fence)
     else
-        if tool_call_block.body and #tool_call_block.body > 0 then
+        local body = tool_call_block.body
+        if body and #body > 0 then
             insert_title_separator(true)
+            -- Output is text, not markdown: a fence keeps a `#` line or an unclosed ``` from rendering.
+            local is_literal = not MARKDOWN_BODY_KINDS[kind]
+            local fence = self:_fence_for(body)
+            if is_literal then
+                lines[#lines + 1] = fence .. "text"
+            end
             local body_start_index = #lines
-            vim.list_extend(lines, tool_call_block.body)
-            add_body_comment_ranges(body_start_index, tool_call_block.body)
-            -- Output cut mid-way through a markdown file leaves a fence open, which would swallow the chat after it.
-            local closing_fence = self:_unclosed_fence(tool_call_block.body)
-            if closing_fence then
-                lines[#lines + 1] = closing_fence
+            vim.list_extend(lines, body)
+            add_body_comment_ranges(body_start_index, body)
+            if is_literal then
+                lines[#lines + 1] = fence
             end
         end
     end
@@ -1060,36 +1073,18 @@ function MessageWriter:_prepare_block_lines(tool_call_block)
     return lines, highlight_ranges
 end
 
---- The fence that closes the code block `body` leaves open, by CommonMark's
---- rules: up to three spaces of indent, three or more of one character, a
---- backtick fence's info string free of backticks, and a close at least as long.
---- @param body string[]
---- @return string|nil closing_fence nil when every block `body` opens is closed
-function MessageWriter:_unclosed_fence(body)
-    --- @type string|nil
-    local open
-    for _, line in ipairs(body) do
-        local run, rest = line:match("^ ? ? ?(```+)(.*)$")
-        if not run then
-            run, rest = line:match("^ ? ? ?(~~~+)(.*)$")
-        end
-        if run and not open then
-            local info_has_backtick = run:sub(1, 1) == "`"
-                and rest:find("`", 1, true) ~= nil
-            if not info_has_backtick then
-                open = run
-            end
-        elseif
-            run
-            and open
-            and run:sub(1, 1) == open:sub(1, 1)
-            and #run >= #open
-            and rest:match("^%s*$")
-        then
-            open = nil
+--- A backtick fence longer than any backtick run in `text`: CommonMark closes a
+--- fence only on a run at least as long, so nothing in `text` can close it.
+--- @param text string[]
+--- @return string fence
+function MessageWriter:_fence_for(text)
+    local longest = 0
+    for _, line in ipairs(text) do
+        for run in line:gmatch("`+") do
+            longest = math.max(longest, #run)
         end
     end
-    return open
+    return string.rep("`", math.max(MIN_FENCE_LENGTH, longest + 1))
 end
 
 --- Set or clear the permission state for a tool call block.

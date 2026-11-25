@@ -1532,20 +1532,66 @@ describe("agentic.ui.MessageWriter", function()
             assert.is_false(in_code_block("The reply after it."))
         end)
 
-        it("leaves output whose fences close as it was", function()
-            local body = { "```lua", "local x = 1", "```" }
+        it("keeps the output literal: its markdown is not parsed", function()
             writer:write_tool_call_block({
-                tool_call_id = "whole-doc",
+                tool_call_id = "grep-output",
                 status = "completed",
                 kind = "execute",
-                argument = "cat doc.md",
-                body = body,
+                argument = "grep -n '#' notes.md",
+                body = { "# Not a heading", "- not an item" },
             })
 
-            local content = get_all_content()
-            assert.truthy(
-                content:find(table.concat(body, "\n") .. "\n\n", 1, true)
-            )
+            assert.is_true(in_code_block("# Not a heading"))
+            assert.is_true(in_code_block("- not an item"))
+        end)
+
+        it("outlasts any fence in the output", function()
+            writer:write_tool_call_block({
+                tool_call_id = "long-fence",
+                status = "completed",
+                kind = "execute",
+                argument = "cat fences.md",
+                body = { string.rep("`", 7), "inside the doc's own fence" },
+            })
+            writer:write_message_chunk(make_update("The reply after it."))
+
+            assert.is_true(in_code_block("inside the doc's own fence"))
+            assert.is_false(in_code_block("The reply after it."))
+        end)
+
+        it("outlasts any fence in a long title", function()
+            Config.tool_calls = {
+                subagent_activity = "full",
+                title = {
+                    max_length = 10,
+                    truncate_title_kinds = { "execute" },
+                },
+            }
+            writer:write_tool_call_block({
+                tool_call_id = "heredoc",
+                status = "completed",
+                kind = "execute",
+                argument = ("cat <<EOF\n%s\n%s\nEOF"):format(
+                    string.rep("`", 6),
+                    string.rep("`", 6)
+                ),
+                body = { "done" },
+            })
+            writer:write_message_chunk(make_update("The reply after it."))
+
+            assert.is_false(in_code_block("The reply after it."))
+        end)
+
+        it("renders a sub-agent's reply as markdown", function()
+            writer:write_tool_call_block({
+                tool_call_id = "explore",
+                status = "completed",
+                kind = "think",
+                argument = "Explore the repo",
+                body = { "Found **three** callers." },
+            })
+
+            assert.is_false(in_code_block("Found **three** callers."))
         end)
     end)
 
@@ -1597,7 +1643,13 @@ describe("agentic.ui.MessageWriter", function()
                 assert.truthy(content:find("`````bash", 1, true))
                 assert.truthy(content:find(string.rep("x", 55), 1, true))
                 assert.truthy(content:find("second line", 1, true))
-                assert.truthy(content:find("`````\n\n---\n\noutput", 1, true))
+                assert.truthy(
+                    content:find(
+                        "`````\n\n---\n\n`````text\noutput\n`````",
+                        1,
+                        true
+                    )
+                )
                 assert.is_false(
                     line_has_comment_highlight(TITLE_FENCE .. "bash")
                 )
@@ -1631,7 +1683,7 @@ describe("agentic.ui.MessageWriter", function()
             assert.is_nil(
                 content:find("write(" .. string.rep("x", 50) .. "...)", 1, true)
             )
-            assert.is_nil(content:find("`````", 1, true))
+            assert.is_nil(content:find("`````text\n" .. title, 1, true))
         end)
 
         it("re-renders late long titles without mutating body", function()
@@ -2682,12 +2734,14 @@ describe("agentic.ui.MessageWriter", function()
                 block_layout("anchors")
             local lines =
                 vim.api.nvim_buf_get_lines(bufnr, start_row, end_row + 1, false)
-            -- Layout: header, top_pad, B1, B2, bottom_pad, trailing
-            assert.equal(#lines, 6)
+            -- Layout: header, top_pad, fence, B1, B2, fence, bottom_pad, trailing
+            assert.equal(#lines, 8)
             assert.equal(lines[2], "")
-            assert.equal(lines[3], "B1")
-            assert.equal(lines[4], "B2")
-            assert.equal(lines[5], "")
+            assert.equal(lines[3], "`````text")
+            assert.equal(lines[4], "B1")
+            assert.equal(lines[5], "B2")
+            assert.equal(lines[6], "`````")
+            assert.equal(lines[7], "")
             assert.equal(top_pad_row, start_row + 1)
             assert.equal(bottom_pad_row, end_row - 1)
         end)
